@@ -1,0 +1,5 @@
+default:
+  @just ci
+
+ci *ARGS:
+  nix-unit --override-input gen-bind ../.. --flake .#.tests {{ARGS}}
