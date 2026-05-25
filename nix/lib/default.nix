@@ -6,6 +6,8 @@ let
   contractLib = import ./contract.nix { inherit lib; };
   composeLib = import ./compose.nix { inherit lib; };
   identityLib = import ./identity.nix { inherit lib; };
+  stripLib = import ./strip.nix { inherit lib; };
+  signatureLib = import ./signature.nix { inherit lib; };
 in
 {
   inherit (thunkLib)
@@ -19,4 +21,6 @@ in
   contract = contractLib;
   inherit (composeLib) compose composeWith;
   inherit (identityLib) wrapIdentity;
+  inherit (stripLib) stripBindingArgs;
+  inherit (signatureLib) buildSignature;
 }
