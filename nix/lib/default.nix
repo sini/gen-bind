@@ -3,6 +3,7 @@ let
   thunkLib = import ./thunk.nix { inherit lib; };
   provenanceLib = import ./provenance.nix { inherit lib; };
   mergeStrategyLib = import ./merge-strategy.nix { inherit lib; };
+  contractLib = import ./contract.nix { inherit lib; };
 in
 {
   inherit (thunkLib)
@@ -13,4 +14,5 @@ in
     ;
   provenance = provenanceLib;
   inherit (mergeStrategyLib) mergeStrategy mkMergeValidator;
+  contract = contractLib;
 }
