@@ -1,0 +1,71 @@
+# Merge strategy resolution and collision detection.
+#
+# When a binding name collides with a module-system arg (e.g., both gen-bind
+# and evalModules provide `lib`), the merge strategy determines resolution:
+# - bind-wins: binding shadows module-system arg (default)
+# - system-wins: module-system arg wins, binding dropped
+# - error: throw at evaluation time
+#
+# Academic: Leijen 2005 §2 — scoped labels with duplicate resolution.
+# When two scopes provide the same label, resolution follows a strategy:
+# first-wins (our "bind-wins" via // ordering), or explicit disambiguation.
+# Our "error" strategy mirrors Leijen's strict-extension mode where
+# duplicate labels are rejected.
+{ lib }:
+let
+  provenanceLib = import ./provenance.nix { inherit lib; };
+in
+{
+  mergeStrategy = {
+    bindWins = "bind-wins";
+    systemWins = "system-wins";
+    error = "error";
+
+    fromBindings =
+      bindings:
+      lib.mapAttrs (
+        _: v: if builtins.isAttrs v && v ? _mergeStrategy then v._mergeStrategy else null
+      ) bindings;
+  };
+
+  # Academic: Findler 2002 §2.2 — blame assignment at collision detection.
+  mkMergeValidator =
+    {
+      resolvePolicy,
+      boundArgNames,
+      provenance,
+    }:
+    moduleArgs:
+    let
+      checks = builtins.concatMap (
+        name:
+        let
+          mArgs = moduleArgs.config._module.args or { };
+          hasReal =
+            (builtins.tryEval (builtins.seq (mArgs.${name} or null) (mArgs ? ${name}))).value or false;
+          strategy = resolvePolicy name;
+          prov = provenance.${name} or null;
+          provStr =
+            let
+              s = provenanceLib.format prov;
+            in
+            if s == "" then "" else " (${s})";
+        in
+        if !hasReal then
+          [ ]
+        else if strategy == "error" then
+          throw "gen-bind: binding '${name}'${provStr} collides with module-system arg — set mergeStrategy to resolve"
+        else if strategy == "system-wins" then
+          [
+            "gen-bind: binding '${name}'${provStr} collision — system-wins, binding value dropped"
+          ]
+        else
+          [
+            "gen-bind: binding '${name}'${provStr} collision — bind-wins, module-system value shadowed"
+          ]
+      ) boundArgNames;
+    in
+    # Force checks to WHNF so error-strategy throws are surfaced immediately,
+    # not deferred to the caller's lazy access of .warnings.
+    builtins.seq checks { warnings = checks; };
+}
