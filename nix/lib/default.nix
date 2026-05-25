@@ -8,6 +8,7 @@ let
   identityLib = import ./identity.nix { inherit lib; };
   stripLib = import ./strip.nix { inherit lib; };
   signatureLib = import ./signature.nix { inherit lib; };
+  wrapLib = import ./wrap.nix { inherit lib; };
 in
 {
   inherit (thunkLib)
@@ -23,4 +24,6 @@ in
   inherit (identityLib) wrapIdentity;
   inherit (stripLib) stripBindingArgs;
   inherit (signatureLib) buildSignature;
+  wrap = wrapLib.wrapCore;
+  wrapAll = wrapLib.wrapAllCore;
 }
