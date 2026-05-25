@@ -4,6 +4,8 @@ let
   provenanceLib = import ./provenance.nix { inherit lib; };
   mergeStrategyLib = import ./merge-strategy.nix { inherit lib; };
   contractLib = import ./contract.nix { inherit lib; };
+  composeLib = import ./compose.nix { inherit lib; };
+  identityLib = import ./identity.nix { inherit lib; };
 in
 {
   inherit (thunkLib)
@@ -15,4 +17,6 @@ in
   provenance = provenanceLib;
   inherit (mergeStrategyLib) mergeStrategy mkMergeValidator;
   contract = contractLib;
+  inherit (composeLib) compose composeWith;
+  inherit (identityLib) wrapIdentity;
 }
