@@ -149,4 +149,26 @@ in
       domain = "local";
     };
   };
+
+  # Thunk accessing binding args (not just config) through full wrap pipeline
+  integration.test-thunk-with-binding-ctx = {
+    expr =
+      let
+        thunkValue = mkThunk ({ host, ... }: [ host.name ]);
+        result = wrap {
+          module =
+            { mydata, config, ... }:
+            {
+              networking.domain = builtins.head mydata;
+            };
+          bindings = {
+            host = { name = "igloo"; };
+            mydata = [ thunkValue ];
+          };
+        };
+        evaluated = evalWith [ result.module ];
+      in
+      evaluated.config.networking.domain;
+    expected = "igloo";
+  };
 }

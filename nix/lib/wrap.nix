@@ -14,7 +14,6 @@ let
   mergeStrategyLib = import ./merge-strategy.nix { inherit lib; };
   thunkLib = import ./thunk.nix { inherit lib; };
   signatureLib = import ./signature.nix { inherit lib; };
-  stripLib = import ./strip.nix { inherit lib; };
 
   defaultCfg = {
     bindings = { };
@@ -22,7 +21,7 @@ let
     provenance = { };
     mergeStrategies = { };
     defaultMergeStrategy = mergeStrategyLib.mergeStrategy.bindWins;
-    thunkBindings = [ ];
+    thunkBindings = null;
   };
 
   # Chitil 2012 §2: lazy contract application via genAttrs.
@@ -58,17 +57,20 @@ let
       defaultMergeStrategy;
 
   # Detect which binding args contain thunks (auto or explicit).
+  # When thunkBindings is null, auto-detect by checking if binding values are
+  # lists containing thunk markers. Auto-detection only checks `? __configThunk`
+  # on list entries — it does NOT force the entry values themselves.
   detectThunkArgs =
     thunkBindings: bindings: boundArgNames:
-    if thunkBindings != [ ] then
+    if thunkBindings != null then
       builtins.filter (k: builtins.elem k boundArgNames) thunkBindings
     else
       builtins.filter (
         k:
         let
-          v = bindings.${k};
+          v = bindings.${k} or null;
         in
-        builtins.isList v && builtins.any (entry: thunkLib.isThunk entry) v
+        builtins.isList v && builtins.any (entry: builtins.isAttrs entry && entry ? __configThunk) v
       ) boundArgNames;
 
   # Core wrapping for function modules.
@@ -161,7 +163,7 @@ let
                 if hasThunks then
                   thunkLib.resolveThunks {
                     config = moduleCallArgs.config or { };
-                    ctx = moduleCallArgs;
+                    ctx = bindings;
                     inherit thunkArgNames;
                     bindings = bindWinsArgs;
                   }
@@ -180,17 +182,16 @@ let
         };
 
   # Wrap imports-style modules: { imports = [...]; }
+  # Each import is wrapped once; both .module and .wrapped are read from the
+  # same result record (no duplicate wrapCore calls).
   wrapImportsModule =
     cfg: module:
     let
-      wrappedImports = builtins.map (imp: (wrapCore (cfg // { module = imp; })).module) module.imports;
-      newModule = module // {
-        imports = wrappedImports;
-      };
-      anyWrapped = builtins.any (imp: (wrapCore (cfg // { module = imp; })).wrapped) module.imports;
+      results = builtins.map (imp: wrapCore (cfg // { module = imp; })) module.imports;
+      anyWrapped = builtins.any (r: r.wrapped) results;
     in
     {
-      module = newModule;
+      module = module // { imports = builtins.map (r: r.module) results; };
       wrapped = anyWrapped;
       validator = null;
       signature = signatureLib.buildSignature {
@@ -274,9 +275,10 @@ let
       modules = builtins.map (r: r.module) results;
       validators = builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
       signatures = builtins.map (r: r.signature) results;
-      all = results;
+      all = builtins.map (r: r.module) results
+        ++ builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
     };
 in
 {
-  inherit wrapCore wrapAllCore applyContracts;
+  inherit wrapCore wrapAllCore;
 }
