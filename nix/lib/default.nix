@@ -1,7 +1,7 @@
 { lib }:
 let
-  # Placeholder — populated as modules are implemented
+  thunkLib = import ./thunk.nix { inherit lib; };
 in
 {
-  # gen-bind public API will be exported here
+  inherit (thunkLib) mkThunk mkThunkFrom isThunk resolveThunks;
 }
