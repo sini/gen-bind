@@ -1,5 +1,7 @@
 # gen-bind
 
+[![CI](https://github.com/sini/gen-bind/actions/workflows/ci.yml/badge.svg)](https://github.com/sini/gen-bind/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 Module binding with external arguments for Nix — partial application of bindings into NixOS module functions with closure-based injection, collision detection with blame, lazy contracts, and thunk resolution for config-dependent values.
 
 gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` introspection to inject only the args a module actually declares, merge strategy control when bindings collide with module-system args, contract assertions that fire on demand rather than at wrap time, and provenance tracking that names the source in every error message.
