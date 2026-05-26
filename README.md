@@ -1,6 +1,6 @@
 # gen-bind
 
-Module binding with external arguments for Nix — partial application of bindings into NixOS module functions with signature-directed injection, collision detection with blame, lazy contracts, and thunk resolution for config-dependent values.
+Module binding with external arguments for Nix — partial application of bindings into NixOS module functions with closure-based injection, collision detection with blame, lazy contracts, and thunk resolution for config-dependent values.
 
 gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` introspection to inject only the args a module actually declares, merge strategy control when bindings collide with module-system args, contract assertions that fire on demand rather than at wrap time, and provenance tracking that names the source in every error message.
 
@@ -25,7 +25,9 @@ gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` in
 | [gen-aspects](https://github.com/sini/gen-aspects) | Aspect types (traits, classification, dispatch) |
 | [gen-graph](https://github.com/sini/gen-graph) | Graph queries (combinators, traversals, fixpoint) |
 | [gen-scope](https://github.com/sini/gen-scope) | Scope graphs (construction, evaluation, resolution) |
-| **[gen-bind](https://github.com/sini/gen-bind)** | **Module binding (wrapping, contracts, collision detection)** |
+| [gen-select](https://github.com/sini/gen-select) | Selector algebra (pattern matching over graph positions) |
+| [gen-bind](https://github.com/sini/gen-bind) | Module binding (inject args into NixOS modules) |
+| [gen-derive](https://github.com/sini/gen-derive) | Rule dispatch (stratified phases, fixpoint, conflict resolution) |
 
 ## Quick Start
 
@@ -475,16 +477,15 @@ Computes a signature record: `{ requires; bound; unsatisfied; mergeStrategies }`
 - Contracts fire on demand only — the contract thunk wraps the binding value in an `assert`; if the module never demands the arg, the contract never runs.
 - Unbuilt hosts have zero cost — thunks in list bindings resolve only when the wrapper function is called by `evalModules`.
 
-## Academic Foundations
+## Theoretical Foundations
 
 | Feature | Paper |
 |---------|-------|
-| Signature-directed binding | [Reynolds — *Definitional Interpreters for Higher-Order Programming Languages* (1972)](https://dl.acm.org/doi/10.1145/800194.805852) — deferred evaluation via closure inspection; `builtins.functionArgs` is the Nix analogue of formal parameter reflection |
+| Closure-based binding | [Reynolds — *Definitional Interpreters for Higher-Order Programming Languages* (1972)](https://dl.acm.org/doi/10.1145/800194.805852) — closure environments and partial application; `builtins.functionArgs` is the Nix analogue of formal parameter reflection |
 | Blame tracking | [Findler & Felleisen — *Contracts for Higher-Order Functions* (ICFP 2002)](https://www2.ccs.neu.edu/racket/pubs/icfp2002-ff.pdf) — blame assignment identifies the guilty party; provenance metadata plays the same role in gen-bind |
 | Lazy contracts | [Chitil — *Practical Typed Lazy Contracts* (ICFP 2012)](https://kar.kent.ac.uk/30790/1/contacts.pdf) — contracts as partial identities (`assert c ⊑ id`) that fire on demand; gen-bind contracts wrap binding values in the same pattern |
-| Merge resolution | [Leijen — *Extensible Records with Scoped Labels* (TFP 2005)](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/scopedlabels.pdf) — first-wins selection and strict-extension rejection; `bindWins` and `error` strategies implement these two modes |
+| Merge resolution | [Leijen — *Extensible Records with Scoped Labels* (TFP 2005)](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/scopedlabels.pdf) — free extension over strict extension; `bindWins` allows duplicate labels while `error` enforces strict extension |
 | Module signatures | [Cardelli — *Program Fragments, Linking, and Modularization* (POPL 1997)](http://lucacardelli.name/Papers/Linking.A4.pdf) — linksets carry `requires`/`provides` interfaces; gen-bind's `signature.requires` and `signature.bound` are a lightweight analog |
-| Constructor injection | [Bracha & Ungar — *Mirrors: Design Principles for Meta-level Facilities of Object-Oriented Programming Languages* (OOPSLA 2004)](https://bracha.org/mirrors.pdf) — pluggable composition via partial application; `wrap` is a mixin combinator that partially applies external bindings while preserving the module's remaining interface |
 
 ## Architecture
 
@@ -503,7 +504,7 @@ wrap / wrapAll
       { module; wrapped; validator; signature; advertisedArgs }
         ↓ optional post-processing
       wrapIdentity — NixOS key stamping (Cardelli 1997)
-      stripBindingArgs — formal arg cleanup (Reynolds 1972)
+      stripBindingArgs — formal arg cleanup
       mkMergeValidator — collision detection with blame (Findler 2002)
 ```
 
