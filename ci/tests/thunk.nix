@@ -1,6 +1,11 @@
 { lib, bindLib, ... }:
 let
-  inherit (bindLib) mkThunk mkThunkFrom isThunk resolveThunks;
+  inherit (bindLib)
+    mkThunk
+    mkThunkFrom
+    isThunk
+    resolveThunks
+    ;
 in
 {
   thunk.test-mkThunk-creates-marker = {
@@ -30,8 +35,14 @@ in
 
   thunk.test-resolveThunks-resolves-list = {
     expr = resolveThunks {
-      config = { networking.hostName = "igloo"; };
-      ctx = { host = { name = "igloo"; }; };
+      config = {
+        networking.hostName = "igloo";
+      };
+      ctx = {
+        host = {
+          name = "igloo";
+        };
+      };
       thunkArgNames = [ "data" ];
       bindings = {
         data = [
@@ -40,13 +51,22 @@ in
         ];
       };
     };
-    expected = { data = [ "igloo" "static" ]; };
+    expected = {
+      data = [
+        "igloo"
+        "static"
+      ];
+    };
   };
 
   thunk.test-resolveThunks-passes-ctx-args = {
     expr = resolveThunks {
       config = { };
-      ctx = { host = { name = "igloo"; }; };
+      ctx = {
+        host = {
+          name = "igloo";
+        };
+      };
       thunkArgNames = [ "data" ];
       bindings = {
         data = [
@@ -54,7 +74,9 @@ in
         ];
       };
     };
-    expected = { data = [ "igloo" ]; };
+    expected = {
+      data = [ "igloo" ];
+    };
   };
 
   thunk.test-resolveThunks-skips-non-thunk-args = {
@@ -63,10 +85,19 @@ in
       ctx = { };
       thunkArgNames = [ "data" ];
       bindings = {
-        data = [ "a" "b" ];
+        data = [
+          "a"
+          "b"
+        ];
         other = "untouched";
       };
     };
-    expected = { data = [ "a" "b" ]; other = "untouched"; };
+    expected = {
+      data = [
+        "a"
+        "b"
+      ];
+      other = "untouched";
+    };
   };
 }

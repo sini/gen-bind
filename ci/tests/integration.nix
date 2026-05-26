@@ -1,6 +1,11 @@
 { lib, bindLib, ... }:
 let
-  inherit (bindLib) wrap wrapAll wrapIdentity mkThunk;
+  inherit (bindLib)
+    wrap
+    wrapAll
+    wrapIdentity
+    mkThunk
+    ;
 
   # Minimal evalModules with networking options for round-trip testing.
   evalWith =
@@ -24,7 +29,8 @@ let
             };
           }
         )
-      ] ++ modules;
+      ]
+      ++ modules;
     };
 in
 {
@@ -33,7 +39,12 @@ in
       let
         result = wrap {
           module =
-            { host, config, lib, ... }:
+            {
+              host,
+              config,
+              lib,
+              ...
+            }:
             {
               networking.hostName = host.name;
             };
@@ -53,7 +64,11 @@ in
     expr =
       let
         result = wrap {
-          module = { host }: { networking.hostName = host.name; };
+          module =
+            { host }:
+            {
+              networking.hostName = host.name;
+            };
           bindings = {
             host = {
               name = "iceberg";
@@ -97,15 +112,22 @@ in
       let
         mod1 = wrapIdentity {
           class = "nixos";
-          module = { x = 1; };
+          module = {
+            x = 1;
+          };
           identity = "test";
         };
         mod2 = wrapIdentity {
           class = "nixos";
-          module = { networking.hostName = "deduped-away"; };
+          module = {
+            networking.hostName = "deduped-away";
+          };
           identity = "test";
         };
-        evaluated = evalWith [ mod1 mod2 ];
+        evaluated = evalWith [
+          mod1
+          mod2
+        ];
       in
       {
         # mod1 contributes x = 1
@@ -162,7 +184,9 @@ in
               networking.domain = builtins.head mydata;
             };
           bindings = {
-            host = { name = "igloo"; };
+            host = {
+              name = "igloo";
+            };
             mydata = [ thunkValue ];
           };
         };
