@@ -4,6 +4,30 @@ Module binding with external arguments for Nix — partial application of bindin
 
 gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` introspection to inject only the args a module actually declares, merge strategy control when bindings collide with module-system args, contract assertions that fire on demand rather than at wrap time, and provenance tracking that names the source in every error message.
 
+## Table of Contents
+
+- [Terminology](#terminology)
+- [Gen Ecosystem](#gen-ecosystem)
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+  - [Bindings and Wrapping](#bindings-and-wrapping)
+  - [Module Shapes](#module-shapes)
+  - [Merge Strategies](#merge-strategies)
+  - [Config Thunks](#config-thunks)
+  - [Lazy Contracts](#lazy-contracts)
+  - [Provenance](#provenance)
+  - [Signatures](#signatures)
+  - [Layered Composition](#layered-composition)
+  - [Identity Wrapping](#identity-wrapping)
+  - [Arg Stripping](#arg-stripping)
+  - [Batch Wrapping](#batch-wrapping)
+- [API Reference](#api-reference)
+- [Laziness Guarantees](#laziness-guarantees)
+- [Architecture](#architecture)
+- [Testing](#testing)
+- [Theoretical Foundations](#theoretical-foundations)
+- [License](#license)
+
 ## Terminology
 
 | Term | Definition |
@@ -209,7 +233,7 @@ Every `wrap` result includes a signature describing the module's binding interfa
 
 ```nix
 result.signature
-# → {
+# -> {
 #     requires = { config = false; lib = false; };  # still needed from evalModules
 #     bound = { host = { optional = false; provenance = { source = "..."; }; }; };
 #     unsatisfied = [];  # vocabulary keys present but not injected
@@ -253,7 +277,7 @@ keyed = bindLib.wrapIdentity {
   identity = "host=igloo";
   # isAnon = false;  # default: sets key + _file + imports wrapper
 };
-# keyed → { key = "nixos@host=igloo"; _file = "nixos@host=igloo"; imports = [ result.module ]; }
+# keyed -> { key = "nixos@host=igloo"; _file = "nixos@host=igloo"; imports = [ result.module ]; }
 ```
 
 Set `isAnon = true` to use `lib.setDefaultModuleLocation` instead — useful for anonymous modules that shouldn't appear in `key`-based dedup.
@@ -286,7 +310,7 @@ batch = bindLib.wrapAll {
 # batch.modules    — list of wrapped modules
 # batch.validators — list of non-null validators (one per wrapped function module)
 # batch.signatures — list of signatures (one per module)
-# batch.all        — full result records (module + wrapped + validator + signature)
+# batch.all        — wrapped modules ++ non-null validators (flat list)
 ```
 
 ## API Reference
@@ -329,13 +353,18 @@ wrapAll {
 
 Contracts are pre-computed once and shared across all modules. Returns `{ modules; validators; signatures; all }`.
 
+- `modules` — list of wrapped modules
+- `validators` — list of non-null validators
+- `signatures` — list of signatures (one per module)
+- `all` — `modules ++ validators` (flat list of wrapped modules and non-null validators)
+
 ### `mkThunk`
 
 ```nix
 mkThunk fn
 ```
 
-Creates a config-dependent thunk. `fn` receives `{ config; <ctx-args>... }` — `ctx-args` are any of `fn`'s named parameters that exist in the module call context. The return value is spliced into the list binding (single value or list both work).
+Creates a config-dependent thunk. `fn` receives `{ config; <ctx-args>... }` — `ctx-args` are any of `fn`'s named parameters that exist in the binding context. The return value is spliced into the list binding (single value or list both work).
 
 ### `mkThunkFrom`
 
@@ -348,7 +377,7 @@ Like `mkThunk` but annotates the thunk with a source scope string for tracing.
 ### `isThunk`
 
 ```nix
-isThunk value  # → bool
+isThunk value  # -> bool
 ```
 
 Returns `true` if `value` is a thunk created by `mkThunk` or `mkThunkFrom`.
@@ -367,7 +396,7 @@ Resolves thunks within list-valued bindings. For each arg name in `thunkArgNames
 contract.mk { check; message ? "contract violation"; blame ? null; }
 ```
 
-Creates a contract. `check` is `value → bool`. `blame` is an optional string added to the error message.
+Creates a contract. `check` is `value -> bool`. `blame` is an optional string added to the error message.
 
 ### `contract.hasFields`
 
@@ -405,7 +434,7 @@ mergeStrategy.systemWins  # "system-wins" — module-system arg wins, binding dr
 mergeStrategy.error       # "error"       — throw at eval time with blame
 
 mergeStrategy.fromBindings bindings
-# → { name = strategy | null; } — extracts _mergeStrategy annotations from binding values
+# -> { name = strategy | null; } — extracts _mergeStrategy annotations from binding values
 ```
 
 ### `mkMergeValidator`
@@ -414,7 +443,7 @@ mergeStrategy.fromBindings bindings
 mkMergeValidator { resolvePolicy; boundArgNames; provenance; }
 ```
 
-Returns a validator function `moduleArgs → { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. Error-strategy collisions throw immediately (`builtins.seq` forces the check list to WHNF). Bind-wins and system-wins collisions produce warning strings in `.warnings`.
+Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. Error-strategy collisions throw immediately (`builtins.seq` forces the check list to WHNF). Bind-wins and system-wins collisions produce warning strings in `.warnings`.
 
 ### `provenance.format`
 
@@ -477,35 +506,25 @@ Computes a signature record: `{ requires; bound; unsatisfied; mergeStrategies }`
 - Contracts fire on demand only — the contract thunk wraps the binding value in an `assert`; if the module never demands the arg, the contract never runs.
 - Unbuilt hosts have zero cost — thunks in list bindings resolve only when the wrapper function is called by `evalModules`.
 
-## Theoretical Foundations
-
-| Feature | Paper |
-|---------|-------|
-| Closure-based binding | [Reynolds — *Definitional Interpreters for Higher-Order Programming Languages* (1972)](https://dl.acm.org/doi/10.1145/800194.805852) — closure environments and partial application; `builtins.functionArgs` is the Nix analogue of formal parameter reflection |
-| Blame tracking | [Findler & Felleisen — *Contracts for Higher-Order Functions* (ICFP 2002)](https://www2.ccs.neu.edu/racket/pubs/icfp2002-ff.pdf) — blame assignment identifies the guilty party; provenance metadata plays the same role in gen-bind |
-| Lazy contracts | [Chitil — *Practical Typed Lazy Contracts* (ICFP 2012)](https://kar.kent.ac.uk/30790/1/contacts.pdf) — contracts as partial identities (`assert c ⊑ id`) that fire on demand; gen-bind contracts wrap binding values in the same pattern |
-| Merge resolution | [Leijen — *Extensible Records with Scoped Labels* (TFP 2005)](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/scopedlabels.pdf) — free extension over strict extension; `bindWins` allows duplicate labels while `error` enforces strict extension |
-| Module signatures | [Cardelli — *Program Fragments, Linking, and Modularization* (POPL 1997)](http://lucacardelli.name/Papers/Linking.A4.pdf) — linksets carry `requires`/`provides` interfaces; gen-bind's `signature.requires` and `signature.bound` are a lightweight analog |
-
 ## Architecture
 
 ```
 External bindings (entity context, enrichment, pipes)
-  ↓ composed via
+  | composed via
 compose / composeWith
-  ↓ applied via
+  | applied via
 wrap / wrapAll
-  ├── builtins.functionArgs — inspect module signature
-  ├── applyContracts — lazy assertion wrapping (Chitil 2012)
-  ├── resolvePolicy — per-arg merge strategy dispatch (Leijen 2005)
-  ├── detectThunkArgs — identify config-dependent list bindings
-  └── wrapFunctionModule / wrapImportsModule / passthrough
-        ↓ result
+  |-- builtins.functionArgs — inspect module signature
+  |-- applyContracts — lazy assertion wrapping (cf. Chitil 2012 §4.2)
+  |-- resolvePolicy — per-arg merge strategy dispatch (cf. Leijen 2005 §2)
+  |-- detectThunkArgs — identify config-dependent list bindings
+  '-- wrapFunctionModule / wrapImportsModule / passthrough
+        | result
       { module; wrapped; validator; signature; advertisedArgs }
-        ↓ optional post-processing
-      wrapIdentity — NixOS key stamping (Cardelli 1997)
+        | optional post-processing
+      wrapIdentity — NixOS key stamping (cf. Cardelli 1997 §5)
       stripBindingArgs — formal arg cleanup
-      mkMergeValidator — collision detection with blame (Findler 2002)
+      mkMergeValidator — collision detection with blame (cf. Findler 2002 §2)
 ```
 
 ### File Layout
@@ -533,6 +552,25 @@ cd templates/ci
 nix develop --override-input gen-bind ../.. -c nix-unit \
   --override-input gen-bind ../.. --flake .#.tests
 ```
+
+## Theoretical Foundations
+
+gen-bind's design draws on five papers. Each is either **implemented** (the paper's formalism directly shapes the code) or **informed by** (the paper's concepts influenced the approach without direct implementation).
+
+### Implements
+
+| Feature | Paper | Relationship |
+|---------|-------|-------------|
+| Blame tracking | Findler & Felleisen -- [*Contracts for Higher-Order Functions*](https://www2.ccs.neu.edu/racket/pubs/icfp2002-ff.pdf) (ICFP 2002) | Provenance metadata plays the role of Findler's blame labels: when a contract fires or a collision is detected, the error message identifies the guilty party (binding source, scope rule) via the same covariant/contravariant blame assignment structure (cf. Findler 2002 S2.3). |
+| Lazy contracts | Chitil -- [*Practical Typed Lazy Contracts*](https://kar.kent.ac.uk/30790/1/contacts.pdf) (ICFP 2012) | Contracts are partial identities (`assert c` is less than or equal to `id` -- Chitil 2012 S4.2) that fire on demand. gen-bind contracts wrap binding values in exactly this pattern: the assertion thunk is never forced unless the consuming module demands the arg (cf. Chitil 2012 S2). |
+| Module signatures | Cardelli -- [*Program Fragments, Linking, and Modularization*](http://lucacardelli.name/Papers/Linking.A4.pdf) (POPL 1997) | gen-bind's `signature.requires` and `signature.bound` are a lightweight analog of Cardelli's linkset interfaces: each compilation unit (wrapped module) declares what it provides (bound args) and what it still needs (requires from evalModules). Identity wrapping implements Cardelli's fragment naming for dedup (cf. Cardelli 1997 S5). |
+
+### Informed by
+
+| Feature | Paper | Relationship |
+|---------|-------|-------------|
+| Closure-based binding | Reynolds -- [*Definitional Interpreters for Higher-Order Programming Languages*](https://dl.acm.org/doi/10.1145/800194.805852) (1972) | Reynolds' closure environments inform the approach but gen-bind's wrapping is partial application, not defunctionalization per se. `builtins.functionArgs` is the Nix analogue of formal parameter reflection in a definitional interpreter (cf. Reynolds 1972 S4). |
+| Merge resolution | Leijen -- [*Extensible Records with Scoped Labels*](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/scopedlabels.pdf) (TFP 2005) | Leijen's free extension (retaining duplicate labels with scoped resolution) informs the merge strategy vocabulary: `bindWins` shadows like Leijen's first-match selection; `error` mirrors strict extension where duplicates are rejected (cf. Leijen 2005 S2). gen-bind uses flat `//` rather than row-typed scoping. |
 
 ## License
 
