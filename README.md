@@ -1,6 +1,6 @@
 # gen-bind
 
-[![CI](https://github.com/sini/gen-bind/actions/workflows/ci.yml/badge.svg)](https://github.com/sini/gen-bind/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/sini/gen-bind/actions/workflows/ci.yml/badge.svg)](https://github.com/sini/gen-bind/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github)](https://github.com/sponsors/sini)
 
 Module binding with external arguments for Nix — partial application of bindings into NixOS module functions with closure-based injection, collision detection with blame, lazy contracts, and thunk resolution for config-dependent values.
 
