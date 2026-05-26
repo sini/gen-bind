@@ -26,7 +26,6 @@ gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` in
 - [Architecture](#architecture)
 - [Testing](#testing)
 - [Theoretical Foundations](#theoretical-foundations)
-- [License](#license)
 
 ## Terminology
 
@@ -571,7 +570,3 @@ gen-bind's design draws on five papers. Each is either **implemented** (the pape
 |---------|-------|-------------|
 | Closure-based binding | Reynolds -- [*Definitional Interpreters for Higher-Order Programming Languages*](https://dl.acm.org/doi/10.1145/800194.805852) (1972) | Reynolds' closure environments inform the approach but gen-bind's wrapping is partial application, not defunctionalization per se. `builtins.functionArgs` is the Nix analogue of formal parameter reflection in a definitional interpreter (cf. Reynolds 1972 S4). |
 | Merge resolution | Leijen -- [*Extensible Records with Scoped Labels*](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/scopedlabels.pdf) (TFP 2005) | Leijen's free extension (retaining duplicate labels with scoped resolution) informs the merge strategy vocabulary: `bindWins` shadows like Leijen's first-match selection; `error` mirrors strict extension where duplicates are rejected (cf. Leijen 2005 S2). gen-bind uses flat `//` rather than row-typed scoping. |
-
-## License
-
-MIT
