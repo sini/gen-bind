@@ -190,7 +190,7 @@ in
     expected = 3;
   };
 
-  wrap.test-wrapAll-all-includes-validators = {
+  wrap.test-wrapAll-all-length-equals-modules-plus-validators = {
     expr =
       let
         result = wrapAll {
@@ -202,7 +202,7 @@ in
           };
         };
       in
-      builtins.length result.all >= builtins.length result.modules;
+      builtins.length result.all == builtins.length result.modules + builtins.length result.validators;
     expected = true;
   };
 }

@@ -189,11 +189,14 @@ let
     let
       results = builtins.map (imp: wrapCore (cfg // { module = imp; })) module.imports;
       anyWrapped = builtins.any (r: r.wrapped) results;
+      # Collect first sub-import validator (spec lines 469-470)
+      validatorResults = builtins.filter (r: r.validator != null) results;
+      firstValidator = if validatorResults == [ ] then null else (builtins.head validatorResults).validator;
     in
     {
       module = module // { imports = builtins.map (r: r.module) results; };
       wrapped = anyWrapped;
-      validator = null;
+      validator = firstValidator;
       signature = signatureLib.buildSignature {
         module = _: { };
         inherit (cfg)
@@ -270,13 +273,14 @@ let
       };
 
       results = builtins.map (mod: wrapCore (sharedCfg // { module = mod; })) modules;
+      mods = builtins.map (r: r.module) results;
+      vals = builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
     in
     {
-      modules = builtins.map (r: r.module) results;
-      validators = builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
+      modules = mods;
+      validators = vals;
       signatures = builtins.map (r: r.signature) results;
-      all = builtins.map (r: r.module) results
-        ++ builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
+      all = mods ++ vals;
     };
 in
 {
