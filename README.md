@@ -544,10 +544,10 @@ nix/lib/
 
 ## Testing
 
-Tests use nix-unit in `templates/ci/`:
+Tests use nix-unit in `ci/`:
 
 ```bash
-cd templates/ci
+cd ci
 nix develop --override-input gen-bind ../.. -c nix-unit \
   --override-input gen-bind ../.. --flake .#.tests
 ```
