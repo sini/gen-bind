@@ -20,8 +20,7 @@
       provenance ? { },
     }:
     let
-      allArgs =
-        if builtins.isFunction module then builtins.functionArgs module else { };
+      allArgs = if builtins.isFunction module then builtins.functionArgs module else { };
       argNames = builtins.attrNames allArgs;
       boundArgNames = builtins.filter (k: bindings ? ${k}) argNames;
     in
@@ -46,8 +45,6 @@
         inVocabulary && !isBound && !isOptional
       ) argNames;
 
-      mergeStrategies = lib.genAttrs boundArgNames (
-        k: mergeStrategies.${k} or defaultMergeStrategy
-      );
+      mergeStrategies = lib.genAttrs boundArgNames (k: mergeStrategies.${k} or defaultMergeStrategy);
     };
 }

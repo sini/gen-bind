@@ -191,10 +191,13 @@ let
       anyWrapped = builtins.any (r: r.wrapped) results;
       # Collect first sub-import validator (spec lines 469-470)
       validatorResults = builtins.filter (r: r.validator != null) results;
-      firstValidator = if validatorResults == [ ] then null else (builtins.head validatorResults).validator;
+      firstValidator =
+        if validatorResults == [ ] then null else (builtins.head validatorResults).validator;
     in
     {
-      module = module // { imports = builtins.map (r: r.module) results; };
+      module = module // {
+        imports = builtins.map (r: r.module) results;
+      };
       wrapped = anyWrapped;
       validator = firstValidator;
       signature = signatureLib.buildSignature {

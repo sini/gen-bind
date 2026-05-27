@@ -27,23 +27,19 @@ in
       inherit check message blame;
     };
 
-  hasFields =
-    fields:
-    {
-      __contract = true;
-      check = v: builtins.all (f: v ? ${f}) fields;
-      message = "value must have fields: ${builtins.concatStringsSep ", " fields}";
-      blame = null;
-    };
+  hasFields = fields: {
+    __contract = true;
+    check = v: builtins.all (f: v ? ${f}) fields;
+    message = "value must have fields: ${builtins.concatStringsSep ", " fields}";
+    blame = null;
+  };
 
-  isType =
-    type:
-    {
-      __contract = true;
-      check = v: builtins.typeOf v == type;
-      message = "value must be of type ${type}";
-      blame = null;
-    };
+  isType = type: {
+    __contract = true;
+    check = v: builtins.typeOf v == type;
+    message = "value must be of type ${type}";
+    blame = null;
+  };
 
   nonEmpty = {
     __contract = true;
