@@ -3,7 +3,7 @@ let
   inherit (bindLib) compose composeWith;
 in
 {
-  compose.test-later-shadows-earlier = {
+  flake.tests.compose.test-later-shadows-earlier = {
     expr = compose [
       {
         host = "a";
@@ -17,7 +17,7 @@ in
     };
   };
 
-  compose.test-empty-layers = {
+  flake.tests.compose.test-empty-layers = {
     expr = compose [
       { }
       { x = 1; }
@@ -28,7 +28,7 @@ in
     };
   };
 
-  compose.test-composeWith-merges-all-fields = {
+  flake.tests.compose.test-composeWith-merges-all-fields = {
     expr =
       let
         result = composeWith [
@@ -74,7 +74,7 @@ in
     };
   };
 
-  compose.test-composeWith-later-wins = {
+  flake.tests.compose.test-composeWith-later-wins = {
     expr =
       (composeWith [
         {

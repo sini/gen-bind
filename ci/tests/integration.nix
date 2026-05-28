@@ -34,7 +34,8 @@ let
     };
 in
 {
-  integration.test-wrap-evalmodules-roundtrip = {
+
+  flake.tests.integration.test-wrap-evalmodules-roundtrip = {
     expr =
       let
         result = wrap {
@@ -60,7 +61,7 @@ in
     expected = "igloo";
   };
 
-  integration.test-fully-applied-in-evalmodules = {
+  flake.tests.integration.test-fully-applied-in-evalmodules = {
     expr =
       let
         result = wrap {
@@ -81,7 +82,7 @@ in
     expected = "iceberg";
   };
 
-  integration.test-thunk-resolution = {
+  flake.tests.integration.test-thunk-resolution = {
     expr =
       let
         thunkValue = mkThunk ({ config, ... }: config.networking.hostName);
@@ -107,7 +108,7 @@ in
   # NixOS deduplicates modules with the same key — the second module with a
   # duplicate key is silently dropped. This test verifies that dedup fires:
   # mod1 contributes x = 1, mod2 (same key) is dropped so hostName stays "".
-  integration.test-identity-dedup = {
+  flake.tests.integration.test-identity-dedup = {
     expr =
       let
         mod1 = wrapIdentity {
@@ -141,7 +142,7 @@ in
     };
   };
 
-  integration.test-wrapAll-batch = {
+  flake.tests.integration.test-wrapAll-batch = {
     expr =
       let
         result = wrapAll {
@@ -173,7 +174,7 @@ in
   };
 
   # Thunk accessing binding args (not just config) through full wrap pipeline
-  integration.test-thunk-with-binding-ctx = {
+  flake.tests.integration.test-thunk-with-binding-ctx = {
     expr =
       let
         thunkValue = mkThunk ({ host, ... }: [ host.name ]);

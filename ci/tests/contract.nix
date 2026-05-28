@@ -3,7 +3,7 @@ let
   inherit (bindLib) contract provenance;
 in
 {
-  contract.test-mk-creates-marker = {
+  flake.tests.contract.test-mk-creates-marker = {
     expr =
       (contract.mk {
         check = _: true;
@@ -12,7 +12,7 @@ in
     expected = true;
   };
 
-  contract.test-hasFields-pass = {
+  flake.tests.contract.test-hasFields-pass = {
     expr =
       let
         c = contract.hasFields [
@@ -27,7 +27,7 @@ in
     expected = true;
   };
 
-  contract.test-hasFields-fail = {
+  flake.tests.contract.test-hasFields-fail = {
     expr =
       !(builtins.tryEval (
         contract.apply (contract.hasFields [
@@ -38,41 +38,41 @@ in
     expected = true;
   };
 
-  contract.test-isType-pass = {
+  flake.tests.contract.test-isType-pass = {
     expr = contract.apply (contract.isType "set") { x = 1; } null;
     expected = {
       x = 1;
     };
   };
 
-  contract.test-isType-fail = {
+  flake.tests.contract.test-isType-fail = {
     expr = !(builtins.tryEval (contract.apply (contract.isType "set") "not-a-set" null)).success;
     expected = true;
   };
 
-  contract.test-nonEmpty-list-pass = {
+  flake.tests.contract.test-nonEmpty-list-pass = {
     expr = contract.apply contract.nonEmpty [ 1 ] null;
     expected = [ 1 ];
   };
 
-  contract.test-nonEmpty-list-fail = {
+  flake.tests.contract.test-nonEmpty-list-fail = {
     expr = !(builtins.tryEval (contract.apply contract.nonEmpty [ ] null)).success;
     expected = true;
   };
 
-  contract.test-nonEmpty-attrset-pass = {
+  flake.tests.contract.test-nonEmpty-attrset-pass = {
     expr = contract.apply contract.nonEmpty { x = 1; } null;
     expected = {
       x = 1;
     };
   };
 
-  contract.test-nonEmpty-null-fail = {
+  flake.tests.contract.test-nonEmpty-null-fail = {
     expr = !(builtins.tryEval (contract.apply contract.nonEmpty null null)).success;
     expected = true;
   };
 
-  contract.test-apply-includes-provenance = {
+  flake.tests.contract.test-apply-includes-provenance = {
     expr =
       let
         result = builtins.tryEval (
@@ -83,7 +83,7 @@ in
     expected = true;
   };
 
-  contract.test-apply-includes-blame = {
+  flake.tests.contract.test-apply-includes-blame = {
     expr =
       let
         c = contract.mk {

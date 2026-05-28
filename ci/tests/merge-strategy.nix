@@ -3,7 +3,8 @@ let
   inherit (bindLib) mergeStrategy mkMergeValidator;
 in
 {
-  merge-strategy.test-constants = {
+
+  flake.tests.merge-strategy.test-constants = {
     expr = {
       bw = mergeStrategy.bindWins;
       sw = mergeStrategy.systemWins;
@@ -16,7 +17,7 @@ in
     };
   };
 
-  merge-strategy.test-fromBindings-detects-mergeStrategy = {
+  flake.tests.merge-strategy.test-fromBindings-detects-mergeStrategy = {
     expr = mergeStrategy.fromBindings {
       host = {
         _mergeStrategy = "system-wins";
@@ -32,7 +33,7 @@ in
     };
   };
 
-  merge-strategy.test-validator-no-collision-no-warnings = {
+  flake.tests.merge-strategy.test-validator-no-collision-no-warnings = {
     expr =
       let
         validator = mkMergeValidator {
@@ -46,7 +47,7 @@ in
     expected = [ ];
   };
 
-  merge-strategy.test-validator-bind-wins-warning = {
+  flake.tests.merge-strategy.test-validator-bind-wins-warning = {
     expr =
       let
         validator = mkMergeValidator {
@@ -68,7 +69,7 @@ in
     expected = 1;
   };
 
-  merge-strategy.test-validator-error-throws = {
+  flake.tests.merge-strategy.test-validator-error-throws = {
     expr =
       let
         validator = mkMergeValidator {

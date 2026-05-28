@@ -3,7 +3,8 @@ let
   inherit (bindLib) stripBindingArgs;
 in
 {
-  strip.test-strips-from-functionArgs-attr = {
+
+  flake.tests.strip.test-strips-from-functionArgs-attr = {
     expr =
       let
         mod = {
@@ -26,7 +27,7 @@ in
     };
   };
 
-  strip.test-strips-from-raw-function = {
+  flake.tests.strip.test-strips-from-raw-function = {
     # lib.setFunctionArgs returns a wrapped attrset; check __functionArgs directly
     expr =
       let
@@ -50,7 +51,7 @@ in
     };
   };
 
-  strip.test-noop-when-nothing-to-strip = {
+  flake.tests.strip.test-noop-when-nothing-to-strip = {
     # nothing to strip: raw function returned unchanged; required args are false
     expr =
       let
@@ -67,7 +68,7 @@ in
     };
   };
 
-  strip.test-noop-for-attrset = {
+  flake.tests.strip.test-noop-for-attrset = {
     expr =
       let
         mod = {

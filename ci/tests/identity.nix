@@ -3,7 +3,8 @@ let
   inherit (bindLib) wrapIdentity;
 in
 {
-  identity.test-named-produces-key-and-file = {
+
+  flake.tests.identity.test-named-produces-key-and-file = {
     expr =
       let
         result = wrapIdentity {
@@ -26,7 +27,7 @@ in
     };
   };
 
-  identity.test-named-key-format = {
+  flake.tests.identity.test-named-key-format = {
     expr =
       (wrapIdentity {
         class = "nixos";
@@ -38,7 +39,7 @@ in
     expected = "nixos@postgres";
   };
 
-  identity.test-anon-uses-setDefaultModuleLocation = {
+  flake.tests.identity.test-anon-uses-setDefaultModuleLocation = {
     expr =
       let
         result = wrapIdentity {

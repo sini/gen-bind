@@ -3,7 +3,8 @@ let
   inherit (bindLib) wrap wrapAll;
 in
 {
-  wrap.test-function-partial-application = {
+
+  flake.tests.wrap.test-function-partial-application = {
     expr =
       (wrap {
         module =
@@ -20,7 +21,7 @@ in
     expected = true;
   };
 
-  wrap.test-function-passthrough-no-match = {
+  flake.tests.wrap.test-function-passthrough-no-match = {
     expr =
       (wrap {
         module = { config, ... }: { };
@@ -31,7 +32,7 @@ in
     expected = false;
   };
 
-  wrap.test-function-fully-applied = {
+  flake.tests.wrap.test-function-fully-applied = {
     expr =
       let
         result = wrap {
@@ -57,7 +58,7 @@ in
     };
   };
 
-  wrap.test-attrset-passthrough = {
+  flake.tests.wrap.test-attrset-passthrough = {
     expr =
       (wrap {
         module = {
@@ -67,7 +68,7 @@ in
     expected = false;
   };
 
-  wrap.test-imports-recursion = {
+  flake.tests.wrap.test-imports-recursion = {
     expr =
       (wrap {
         module = {
@@ -89,7 +90,7 @@ in
     expected = true;
   };
 
-  wrap.test-consistent-shape-wrapped = {
+  flake.tests.wrap.test-consistent-shape-wrapped = {
     expr =
       let
         result = wrap {
@@ -109,7 +110,7 @@ in
     ];
   };
 
-  wrap.test-consistent-shape-passthrough = {
+  flake.tests.wrap.test-consistent-shape-passthrough = {
     expr =
       let
         result = wrap {
@@ -128,7 +129,7 @@ in
     ];
   };
 
-  wrap.test-signature-populated = {
+  flake.tests.wrap.test-signature-populated = {
     expr =
       let
         result = wrap {
@@ -149,7 +150,7 @@ in
     expected = true;
   };
 
-  wrap.test-validator-null-on-passthrough = {
+  flake.tests.wrap.test-validator-null-on-passthrough = {
     expr =
       (wrap {
         module = { config, ... }: { };
@@ -160,7 +161,7 @@ in
     expected = null;
   };
 
-  wrap.test-wrapAll-module-count = {
+  flake.tests.wrap.test-wrapAll-module-count = {
     expr =
       let
         result = wrapAll {
@@ -190,7 +191,7 @@ in
     expected = 3;
   };
 
-  wrap.test-wrapAll-all-length-equals-modules-plus-validators = {
+  flake.tests.wrap.test-wrapAll-all-length-equals-modules-plus-validators = {
     expr =
       let
         result = wrapAll {

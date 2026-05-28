@@ -3,7 +3,8 @@ let
   inherit (bindLib) buildSignature;
 in
 {
-  signature.test-basic-structure = {
+
+  flake.tests.signature.test-basic-structure = {
     expr =
       let
         sig = buildSignature {
@@ -40,7 +41,7 @@ in
     };
   };
 
-  signature.test-optional-arg-marked = {
+  flake.tests.signature.test-optional-arg-marked = {
     expr =
       let
         sig = buildSignature {
@@ -64,7 +65,7 @@ in
     expected = true;
   };
 
-  signature.test-merge-strategies-populated = {
+  flake.tests.signature.test-merge-strategies-populated = {
     expr =
       let
         sig = buildSignature {
@@ -96,7 +97,7 @@ in
     };
   };
 
-  signature.test-non-function-empty-signature = {
+  flake.tests.signature.test-non-function-empty-signature = {
     expr =
       let
         sig = buildSignature {
