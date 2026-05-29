@@ -1,6 +1,6 @@
-{ lib, bindLib, ... }:
+{ lib, genBind, ... }:
 let
-  inherit (bindLib) contract provenance;
+  inherit (genBind) contract provenance;
 in
 {
   flake.tests.contract.test-mk-creates-marker = {

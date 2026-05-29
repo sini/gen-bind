@@ -1,6 +1,6 @@
-{ lib, bindLib, ... }:
+{ lib, genBind, ... }:
 let
-  inherit (bindLib) compose composeWith;
+  inherit (genBind) compose composeWith;
 in
 {
   flake.tests.compose.test-later-shadows-earlier = {

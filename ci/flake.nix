@@ -8,12 +8,12 @@
     inputs@{ gen, nixpkgs, ... }:
     let
       inherit (nixpkgs) lib;
-      bindLib = import ../nix/lib { inherit lib; };
+      genBind = import ../nix/lib { inherit lib; };
     in
     gen.lib.mkCi {
       inherit inputs;
       name = "gen-bind";
       testModules = ./tests;
-      specialArgs = { inherit bindLib; };
+      specialArgs = { inherit genBind; };
     };
 }

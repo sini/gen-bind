@@ -1,6 +1,6 @@
-{ lib, bindLib, ... }:
+{ lib, genBind, ... }:
 let
-  inherit (bindLib) wrap wrapAll;
+  inherit (genBind) wrap wrapAll;
 in
 {
 

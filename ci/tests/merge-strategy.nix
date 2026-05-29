@@ -1,6 +1,6 @@
-{ lib, bindLib, ... }:
+{ lib, genBind, ... }:
 let
-  inherit (bindLib) mergeStrategy mkMergeValidator;
+  inherit (genBind) mergeStrategy mkMergeValidator;
 in
 {
 
