@@ -66,11 +66,11 @@ gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` in
 
   outputs = { gen-bind, nixpkgs, ... }:
     let
-      bindLib = gen-bind.lib;
-      # or: bindLib = import ./path/to/gen-bind/nix/lib { lib = nixpkgs.lib; };
+      genBind = gen-bind.lib;
+      # or: genBind = import ./path/to/gen-bind/nix/lib { lib = nixpkgs.lib; };
     in {
       # Wrap a module with external bindings
-      wrappedModule = (bindLib.wrap {
+      wrappedModule = (genBind.wrap {
         module = { host, config, lib, ... }: {
           networking.hostName = host.name;
         };
@@ -84,8 +84,8 @@ gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` in
 
 ```nix
 let
-  bindLib = import ./path/to/gen-bind/nix/lib { inherit lib; };
-  result = bindLib.wrap {
+  genBind = import ./path/to/gen-bind/nix/lib { inherit lib; };
+  result = genBind.wrap {
     module = { host, pkgs, config, ... }: {
       environment.systemPackages = [ pkgs.git ];
       networking.hostName = host.name;
@@ -100,9 +100,9 @@ in result.module  # function: { pkgs, config, ... } -> { ... }
 
 ```nix
 let
-  bindLib = import ./path/to/gen-bind/nix/lib { inherit lib; };
+  genBind = import ./path/to/gen-bind/nix/lib { inherit lib; };
 in
-# use bindLib.wrap, bindLib.wrapAll, bindLib.contract, etc.
+# use genBind.wrap, genBind.wrapAll, genBind.contract, etc.
 ```
 
 ## Core Concepts
@@ -112,7 +112,7 @@ in
 `wrap` inspects a module's formal parameters via `builtins.functionArgs` and injects only the bindings that match. Non-matching bindings are ignored. The result is a partially-applied module whose remaining args come from `evalModules` as normal.
 
 ```nix
-result = bindLib.wrap {
+result = genBind.wrap {
   module = { host, config, lib, ... }: {
     networking.hostName = host.name;
   };
@@ -139,13 +139,13 @@ When no binding names match the module's args, the module passes through unchang
 When a binding name collides with a module-system arg (e.g., both gen-bind and `evalModules` provide `lib`), the merge strategy determines resolution:
 
 ```nix
-result = bindLib.wrap {
+result = genBind.wrap {
   module = { lib, host, ... }: { networking.hostName = host.name; };
   bindings = { host = { name = "igloo"; }; lib = myCustomLib; };
   mergeStrategies = {
-    lib = bindLib.mergeStrategy.systemWins;  # module-system lib wins
-    # or: bindLib.mergeStrategy.bindWins (default)
-    # or: bindLib.mergeStrategy.error (throw at eval time)
+    lib = genBind.mergeStrategy.systemWins;  # module-system lib wins
+    # or: genBind.mergeStrategy.bindWins (default)
+    # or: genBind.mergeStrategy.error (throw at eval time)
   };
 };
 ```
@@ -165,7 +165,7 @@ Collision detection runs when `mkMergeValidator` is called with the module args.
 Some bindings depend on the `evalModules` fixpoint — they can't be computed until `config` is available. Use `mkThunk` to defer resolution:
 
 ```nix
-result = bindLib.wrap {
+result = genBind.wrap {
   module = { extraModules, config, ... }: {
     imports = extraModules;
   };
@@ -174,7 +174,7 @@ result = bindLib.wrap {
       # Static entry
       myBaseModule
       # Thunk — resolved when evalModules calls the wrapper
-      (bindLib.mkThunk ({ config }: lib.optional config.services.nginx.enable nginxExtraModule))
+      (genBind.mkThunk ({ config }: lib.optional config.services.nginx.enable nginxExtraModule))
     ];
   };
 };
@@ -189,14 +189,14 @@ Thunks travel as markers (`{ __configThunk = true; __fn = fn; }`) through the bi
 Contracts are assertions that fire only when the bound value is demanded — preserving Nix's lazy evaluation semantics. Unbuilt modules have zero contract cost.
 
 ```nix
-result = bindLib.wrap {
+result = genBind.wrap {
   module = { host, ... }: { networking.hostName = host.name; };
   bindings = { host = { name = "igloo"; }; };
   contracts = {
-    host = bindLib.contract.hasFields [ "name" "system" ];
-    # or: bindLib.contract.isType "set"
-    # or: bindLib.contract.nonEmpty
-    # or: bindLib.contract.mk { check = v: v.name != ""; message = "host must have non-empty name"; }
+    host = genBind.contract.hasFields [ "name" "system" ];
+    # or: genBind.contract.isType "set"
+    # or: genBind.contract.nonEmpty
+    # or: genBind.contract.mk { check = v: v.name != ""; message = "host must have non-empty name"; }
   };
   provenance = {
     host = { source = "entity-context"; scope = "host=igloo"; };
@@ -217,7 +217,7 @@ gen-bind: contract violation: value must have fields: name, system (provided by 
 Provenance metadata on the `wrap` call surfaces in all blame messages — collisions, contract violations, and error-strategy throws:
 
 ```nix
-bindLib.wrap {
+genBind.wrap {
   module = myModule;
   bindings = { host = hostVal; };
   provenance = {
@@ -250,21 +250,21 @@ Multiple binding sources (entity context, enrichment, pipes) compose with later 
 
 ```nix
 # compose: plain attrset merge
-allBindings = bindLib.compose [
+allBindings = genBind.compose [
   entityBindings
   enrichmentBindings
   pipeBindings
 ];
 
 # composeWith: structured merge across all binding fields
-cfg = bindLib.composeWith [
+cfg = genBind.composeWith [
   { bindings = entityBindings; provenance = entityProv; }
   { bindings = enrichBindings; contracts = enrichContracts; }
   { bindings = pipeBindings; mergeStrategies = pipeStrats; }
 ];
 # cfg.bindings, cfg.provenance, cfg.contracts, cfg.mergeStrategies — all merged
 
-result = bindLib.wrap (cfg // { module = myModule; });
+result = genBind.wrap (cfg // { module = myModule; });
 ```
 
 ### Identity Wrapping
@@ -272,7 +272,7 @@ result = bindLib.wrap (cfg // { module = myModule; });
 NixOS deduplicates modules by `key`. `wrapIdentity` stamps a stable key onto a wrapped module so that re-emitting the same module at the same identity doesn't duplicate it in `evalModules`:
 
 ```nix
-keyed = bindLib.wrapIdentity {
+keyed = genBind.wrapIdentity {
   class = "nixos";
   module = result.module;
   identity = "host=igloo";
@@ -288,7 +288,7 @@ Set `isAnon = true` to use `lib.setDefaultModuleLocation` instead — useful for
 After wrapping, binding arg names must be removed from the module's advertised args. Otherwise `evalModules` probes `_module.args.<name>` for every advertised arg and crashes when the key doesn't exist.
 
 ```nix
-stripped = bindLib.stripBindingArgs {
+stripped = genBind.stripBindingArgs {
   module = result.module;
   bindingNames = [ "host" ];
 };
@@ -301,7 +301,7 @@ Works on both function modules and attrset modules with `__functionArgs`. Args n
 `wrapAll` wraps a list of modules with shared bindings, pre-computing contracts once across all modules:
 
 ```nix
-batch = bindLib.wrapAll {
+batch = genBind.wrapAll {
   modules = [ modA modB modC ];
   bindings = sharedBindings;
   contracts = sharedContracts;
