@@ -189,7 +189,7 @@ let
     let
       results = builtins.map (imp: wrapCore (cfg // { module = imp; })) module.imports;
       anyWrapped = builtins.any (r: r.wrapped) results;
-      # Collect first sub-import validator (spec lines 469-470)
+      # Propagate only the first non-null sub-import validator
       validatorResults = builtins.filter (r: r.validator != null) results;
       firstValidator =
         if validatorResults == [ ] then null else (builtins.head validatorResults).validator;
