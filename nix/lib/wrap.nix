@@ -5,9 +5,10 @@
 # builtins.functionArgs inspects the module's formal parameters to determine
 # which bindings to inject, achieving partial application without macros.
 #
-# Academic: Bracha 2004 — pluggable composition. The wrapper function is a
-# mixin combinator: it partially applies external bindings while preserving
-# the module's ability to receive remaining args from evalModules.
+# Dependency injection: the wrapper function partially applies external
+# bindings at construction time while preserving the module's ability to
+# receive remaining args from evalModules. (This is plain DI, not Bracha-style
+# mixin composition — bindings are pre-applied closures, not composed mixins.)
 { lib }:
 let
   contractLib = import ./contract.nix { inherit lib; };
