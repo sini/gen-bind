@@ -6,7 +6,10 @@
 # Academic: Cardelli 1997 §3 — linksets carry identity. Each compilation
 # unit (module) has a unique identity that the linker uses to resolve
 # duplicates. gen-bind's key serves the same role within evalModules.
-{ lib }:
+{ ... }:
+let
+  moduleConvention = import ./module-convention.nix { };
+in
 {
   wrapIdentity =
     {
@@ -19,7 +22,7 @@
       loc = "${class}@${identity}";
     in
     if isAnon then
-      lib.setDefaultModuleLocation loc module
+      moduleConvention.setDefaultModuleLocation loc module
     else
       {
         key = loc;

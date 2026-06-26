@@ -11,9 +11,9 @@
 #
 # Academic: Findler & Felleisen 2002 §2 — blame assignment. When a contract
 # fires, the error message identifies the guilty party via provenance metadata.
-{ lib }:
+{ prelude }:
 let
-  provenanceLib = import ./provenance.nix { inherit lib; };
+  provenanceLib = import ./provenance.nix { inherit prelude; };
 in
 {
   mk =
@@ -69,6 +69,6 @@ in
           in
           if s == "" then "" else " (${s})"
         )
-        + lib.optionalString (contract.blame or null != null) " [blame: ${contract.blame}]"
+        + prelude.optionalString (contract.blame or null != null) " [blame: ${contract.blame}]"
       );
 }

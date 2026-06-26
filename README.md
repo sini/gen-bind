@@ -6,6 +6,8 @@ Module binding with external arguments for Nix — partial application of bindin
 
 gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` introspection to inject only the args a module actually declares, merge strategy control when bindings collide with module-system args, contract assertions that fire on demand rather than at wrap time, and provenance tracking that names the source in every error message.
 
+gen-bind is **nixpkgs-lib-free**: its only dependency is [gen-prelude](https://github.com/sini/gen-prelude) (pure, zero-input). It remains module-system-*aware* — not -*dependent* — emitting modules in the nixpkgs `__functionArgs`/`_file`/`key` convention via two helpers vendored locally in `lib/module-convention.nix`, with no `nixpkgs.lib` import. A CI purity invariant and an `evalModules` equivalence test keep that boundary honest.
+
 ## Table of Contents
 
 - [Terminology](#terminology)
@@ -62,12 +64,14 @@ gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` in
 # flake.nix
 {
   inputs.gen-bind.url = "github:sini/gen-bind";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # gen-bind's only dependency is gen-prelude (pulled in transitively, zero-input).
+  # nixpkgs below is the consumer's own dependency, not gen-bind's.
 
-  outputs = { gen-bind, nixpkgs, ... }:
+  outputs = { gen-bind, ... }:
     let
       genBind = gen-bind.lib;
-      # or: genBind = import ./path/to/gen-bind/nix/lib { lib = nixpkgs.lib; };
+      # or instantiate the lib directly (needs a gen-prelude input):
+      #   genBind = import "${gen-bind}/lib" { prelude = inputs.gen-prelude.lib; };
     in {
       # Wrap a module with external bindings
       wrappedModule = (genBind.wrap {
@@ -84,7 +88,8 @@ gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` in
 
 ```nix
 let
-  genBind = import ./path/to/gen-bind/nix/lib { inherit lib; };
+  # prelude = gen-prelude's lib, e.g. import "${gen-prelude}/lib" { }
+  genBind = import ./path/to/gen-bind/lib { inherit prelude; };
   result = genBind.wrap {
     module = { host, pkgs, config, ... }: {
       environment.systemPackages = [ pkgs.git ];
@@ -100,7 +105,8 @@ in result.module  # function: { pkgs, config, ... } -> { ... }
 
 ```nix
 let
-  genBind = import ./path/to/gen-bind/nix/lib { inherit lib; };
+  prelude = import ./path/to/gen-prelude/lib { };
+  genBind = import ./path/to/gen-bind/lib { inherit prelude; };
 in
 # use genBind.wrap, genBind.wrapAll, genBind.contract, etc.
 ```
@@ -281,7 +287,7 @@ keyed = genBind.wrapIdentity {
 # keyed -> { key = "nixos@host=igloo"; _file = "nixos@host=igloo"; imports = [ result.module ]; }
 ```
 
-Set `isAnon = true` to use `lib.setDefaultModuleLocation` instead — useful for anonymous modules that shouldn't appear in `key`-based dedup.
+Set `isAnon = true` to stamp only `_file` (via the vendored `setDefaultModuleLocation` convention helper) instead — useful for anonymous modules that shouldn't appear in `key`-based dedup.
 
 ### Arg Stripping
 
@@ -477,7 +483,7 @@ Structured composition across all four binding fields. Returns `{ bindings; prov
 wrapIdentity { class; module; identity; isAnon ? false; }
 ```
 
-Stamps a stable NixOS module key onto a module. Non-anon: returns `{ key = "${class}@${identity}"; _file = ...; imports = [ module ]; }`. Anon: calls `lib.setDefaultModuleLocation` instead.
+Stamps a stable NixOS module key onto a module. Non-anon: returns `{ key = "${class}@${identity}"; _file = ...; imports = [ module ]; }`. Anon: applies the vendored `setDefaultModuleLocation` convention helper instead.
 
 ### `stripBindingArgs`
 
@@ -531,28 +537,35 @@ wrap / wrapAll
 ### File Layout
 
 ```
-nix/lib/
-  default.nix        — public API surface
-  wrap.nix           — core wrapping logic (wrapCore, wrapAllCore)
-  merge-strategy.nix — collision detection and merge validator
-  contract.nix       — lazy binding contracts (mk, hasFields, isType, nonEmpty, apply)
-  thunk.nix          — config thunk primitives (mkThunk, mkThunkFrom, isThunk, resolveThunks)
-  provenance.nix     — blame formatting
-  compose.nix        — layered composition (compose, composeWith)
-  identity.nix       — NixOS module identity wrapping
-  strip.nix          — binding arg stripping for NixOS compatibility
-  signature.nix      — module signature inference
+lib/
+  default.nix           — public API surface (takes { prelude })
+  wrap.nix              — core wrapping logic (wrapCore, wrapAllCore)
+  merge-strategy.nix    — collision detection and merge validator
+  contract.nix          — lazy binding contracts (mk, hasFields, isType, nonEmpty, apply)
+  thunk.nix             — config thunk primitives (mkThunk, mkThunkFrom, isThunk, resolveThunks)
+  provenance.nix        — blame formatting
+  compose.nix           — layered composition (compose, composeWith)
+  identity.nix          — NixOS module identity wrapping
+  strip.nix             — binding arg stripping for NixOS compatibility
+  signature.nix         — module signature inference
+  module-convention.nix — vendored nixpkgs convention helpers (setFunctionArgs, setDefaultModuleLocation)
 ```
 
 ## Testing
 
-Tests use nix-unit in `ci/`:
+Tests use nix-unit in `ci/` (which keeps a `nixpkgs` dependency for the test runner and
+the real `lib.evalModules` driven by the production-safety equivalence gate):
 
 ```bash
 cd ci
-nix develop --override-input gen-bind ../.. -c nix-unit \
-  --override-input gen-bind ../.. --flake .#.tests
+nix run nixpkgs#nix-unit -- --flake .#tests            # all suites
+nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
+nix flake check                                        # full check incl. treefmt
 ```
+
+The `purity` suite enforces that the library source imports no `nixpkgs.lib`, and the
+`evalmodules-equivalence` suite drives gen-bind output through a real `lib.evalModules`
+to prove the vendored convention helpers stay byte-behavior-identical.
 
 ## Theoretical Foundations
 

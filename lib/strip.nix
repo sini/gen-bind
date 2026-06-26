@@ -7,7 +7,10 @@
 # Academic: Reynolds 1972 §4 — after partial application, the remaining
 # formal parameters are the residual signature. Stripping is the metadata
 # counterpart: updating the advertised interface to match reality.
-{ lib }:
+{ ... }:
+let
+  moduleConvention = import ./module-convention.nix { };
+in
 {
   stripBindingArgs =
     {
@@ -30,5 +33,5 @@
     else if isWrappedAttrset then
       module // { __functionArgs = builtins.removeAttrs rawArgs toStrip; }
     else
-      lib.setFunctionArgs module (builtins.removeAttrs rawArgs toStrip);
+      moduleConvention.setFunctionArgs module (builtins.removeAttrs rawArgs toStrip);
 }

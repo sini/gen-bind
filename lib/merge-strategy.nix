@@ -11,9 +11,9 @@
 # first-wins (our "bind-wins" via // ordering), or explicit disambiguation.
 # Our "error" strategy mirrors Leijen's strict-extension mode where
 # duplicate labels are rejected.
-{ lib }:
+{ prelude }:
 let
-  provenanceLib = import ./provenance.nix { inherit lib; };
+  provenanceLib = import ./provenance.nix { inherit prelude; };
 in
 {
   mergeStrategy = {
@@ -23,7 +23,7 @@ in
 
     fromBindings =
       bindings:
-      lib.mapAttrs (
+      builtins.mapAttrs (
         _: v: if builtins.isAttrs v && v ? _mergeStrategy then v._mergeStrategy else null
       ) bindings;
   };

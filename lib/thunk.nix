@@ -7,7 +7,7 @@
 # Academic: Reynolds 1972 §4 — deferred evaluation via closure inspection.
 # The thunk's __fn is a closure whose formal parameters (builtins.functionArgs)
 # determine which context args to inject alongside config.
-{ lib }:
+{ prelude }:
 {
   mkThunk = fn: {
     __configThunk = true;
@@ -35,7 +35,7 @@
       thunkArgNames,
       bindings,
     }:
-    lib.mapAttrs (
+    builtins.mapAttrs (
       k: v:
       if builtins.elem k thunkArgNames && builtins.isList v then
         builtins.concatMap (
@@ -43,7 +43,7 @@
           if builtins.isAttrs entry && entry ? __configThunk then
             let
               thunkArgs = builtins.functionArgs entry.__fn;
-              ctxArgs = lib.genAttrs (builtins.filter (ak: ctx ? ${ak}) (builtins.attrNames thunkArgs)) (
+              ctxArgs = prelude.genAttrs (builtins.filter (ak: ctx ? ${ak}) (builtins.attrNames thunkArgs)) (
                 ak: ctx.${ak}
               );
               result = entry.__fn (ctxArgs // { inherit config; });

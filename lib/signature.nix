@@ -9,7 +9,7 @@
 # (imports/exports). A linkset declares what it provides and what it still
 # needs. gen-bind's signature is a lightweight analog: `bound` = exports
 # (what gen-bind provided), `requires` = imports (what evalModules must fill).
-{ lib }:
+{ prelude }:
 {
   buildSignature =
     {
@@ -27,7 +27,7 @@
     {
       requires = builtins.removeAttrs allArgs boundArgNames;
 
-      bound = lib.genAttrs boundArgNames (k: {
+      bound = prelude.genAttrs boundArgNames (k: {
         optional = allArgs.${k} or false;
         provenance = provenance.${k} or null;
       });
@@ -45,6 +45,6 @@
         inVocabulary && !isBound && !isOptional
       ) argNames;
 
-      mergeStrategies = lib.genAttrs boundArgNames (k: mergeStrategies.${k} or defaultMergeStrategy);
+      mergeStrategies = prelude.genAttrs boundArgNames (k: mergeStrategies.${k} or defaultMergeStrategy);
     };
 }

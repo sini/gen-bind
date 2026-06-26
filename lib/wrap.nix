@@ -9,12 +9,13 @@
 # bindings at construction time while preserving the module's ability to
 # receive remaining args from evalModules. (This is plain DI, not Bracha-style
 # mixin composition — bindings are pre-applied closures, not composed mixins.)
-{ lib }:
+{ prelude }:
 let
-  contractLib = import ./contract.nix { inherit lib; };
-  mergeStrategyLib = import ./merge-strategy.nix { inherit lib; };
-  thunkLib = import ./thunk.nix { inherit lib; };
-  signatureLib = import ./signature.nix { inherit lib; };
+  contractLib = import ./contract.nix { inherit prelude; };
+  mergeStrategyLib = import ./merge-strategy.nix { inherit prelude; };
+  thunkLib = import ./thunk.nix { inherit prelude; };
+  signatureLib = import ./signature.nix { inherit prelude; };
+  moduleConvention = import ./module-convention.nix { };
 
   defaultCfg = {
     bindings = { };
@@ -36,7 +37,7 @@ let
       bindings
     else
       bindings
-      // lib.genAttrs contractNames (
+      // prelude.genAttrs contractNames (
         k: contractLib.apply contracts.${k} bindings.${k} (provenance.${k} or null)
       );
 
@@ -118,8 +119,8 @@ let
         systemWinsNames = builtins.filter (k: policy k == "system-wins") boundArgNames;
         bindWinsNames = builtins.filter (k: policy k != "system-wins") boundArgNames;
 
-        systemWinsArgs = lib.genAttrs systemWinsNames (k: bindings.${k});
-        bindWinsArgs = lib.genAttrs bindWinsNames (k: bindings.${k});
+        systemWinsArgs = prelude.genAttrs systemWinsNames (k: bindings.${k});
+        bindWinsArgs = prelude.genAttrs bindWinsNames (k: bindings.${k});
 
         thunkArgNames = detectThunkArgs thunkBindings bindings boundArgNames;
         hasThunks = thunkArgNames != [ ];
@@ -173,7 +174,7 @@ let
             in
             module (systemWinsArgs // moduleCallArgs // resolvedBind);
 
-          wrappedModule = lib.setFunctionArgs wrapper remainingArgs;
+          wrappedModule = moduleConvention.setFunctionArgs wrapper remainingArgs;
         in
         {
           module = wrappedModule;

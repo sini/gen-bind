@@ -8,7 +8,7 @@
 # violations identifies WHICH party caused the conflict. gen-bind
 # adapts this: provenance identifies which binding source (scope rule,
 # policy, manual wiring) provided a conflicting value.
-{ lib }:
+{ prelude }:
 {
   format =
     prov:
@@ -16,5 +16,5 @@
       ""
     else
       "provided by '${prov.source}'"
-      + lib.optionalString (prov.scope or null != null) " at scope '${prov.scope}'";
+      + prelude.optionalString (prov.scope or null != null) " at scope '${prov.scope}'";
 }

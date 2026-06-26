@@ -6,7 +6,7 @@
 # Academic: Leijen 2005 §2 — extension with scoped labels. Free extension
 # retains previous fields but selection returns the most recent. Our compose
 # is the simpler attrset //, where later layers overwrite.
-{ lib }:
+{ ... }:
 {
   compose = layers: builtins.foldl' (acc: layer: acc // layer) { } layers;
 
