@@ -11,10 +11,7 @@
 
   outputs =
     { gen-prelude, ... }:
-    let
-      genBind = import ./lib { prelude = import "${gen-prelude}/lib" { }; };
-    in
     {
-      lib = genBind;
+      lib = import ./lib { prelude = gen-prelude.lib; };
     };
 }
