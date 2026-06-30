@@ -88,7 +88,7 @@ gen-bind is **nixpkgs-lib-free**: its only dependency is [gen-prelude](https://g
 
 ```nix
 let
-  # prelude = gen-prelude's lib, e.g. import "${gen-prelude}/lib" { }
+  # prelude = gen-prelude's lib, e.g. import "${gen-prelude}/lib"
   genBind = import ./path/to/gen-bind/lib { inherit prelude; };
   result = genBind.wrap {
     module = { host, pkgs, config, ... }: {
