@@ -17,7 +17,7 @@ let
         narHash
         ;
     }
-  }/lib" { };
+  }/lib";
   genBind = import ../lib { inherit prelude; };
 in
 {
