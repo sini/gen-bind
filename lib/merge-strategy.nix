@@ -65,7 +65,15 @@ in
           ]
       ) boundArgNames;
     in
-    # Force checks to WHNF so error-strategy throws are surfaced immediately,
-    # not deferred to the caller's lazy access of .warnings.
-    builtins.seq checks { warnings = checks; };
+    # Lazy `config.warnings` — NOT `builtins.seq checks { … }`. The validator is a
+    # top-level module in the wrapAll `.all` set (modules ++ validators). evalModules
+    # forces every top-level module to WHNF during module *collection* (to read
+    # imports/key/_file); an eager `seq checks` would force `config._module.args` at
+    # that point, before the config fixpoint exists → infinite recursion. Emitting a
+    # bare (config-implicit) `warnings` keeps the module's WHNF free of `checks`, so
+    # `config._module.args` is read only when `config.warnings` is demanded (post-fixpoint,
+    # the NixOS-idiomatic point). error-strategy still throws — lazily, on `.warnings` access.
+    {
+      warnings = checks;
+    };
 }

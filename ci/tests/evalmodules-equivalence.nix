@@ -93,4 +93,54 @@ in
     expr = evaluatedAnon.options.foo.declarations;
     expected = [ "nixos@anonmod" ];
   };
+
+  # (4) `.all` (wrapped modules ++ collision validators) is evalModules-SAFE. The lazy
+  # validator (config-implicit `warnings`, no eager `seq checks`) no longer forces
+  # `config._module.args` at module-collection WHNF, so the whole batch — validators
+  # included — drives through a real evalModules without infinite recursion: config
+  # resolves from the injected binding and a no-collision binding emits zero warnings.
+  flake.tests.evalmodules-equivalence.test-all-batch-through-evalModules = {
+    expr =
+      let
+        batch = genBind.wrapAll {
+          modules = [
+            (
+              { host, config, ... }:
+              {
+                config.result = host.name;
+              }
+            )
+          ];
+          bindings.host = {
+            name = "beta";
+          };
+        };
+        evaluated = lib.evalModules {
+          modules = [
+            (
+              { lib, ... }:
+              {
+                options.result = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                };
+                options.warnings = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                };
+              }
+            )
+          ]
+          ++ batch.all;
+        };
+      in
+      {
+        result = evaluated.config.result;
+        warnings = evaluated.config.warnings;
+      };
+    expected = {
+      result = "beta";
+      warnings = [ ];
+    };
+  };
 }

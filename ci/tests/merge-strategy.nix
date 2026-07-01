@@ -69,6 +69,9 @@ in
     expected = 1;
   };
 
+  # error-strategy throws on collision — lazily, when `.warnings` is demanded (the
+  # validator is now evalModules-safe: no eager `seq`, so the throw surfaces on access,
+  # not at module-collection WHNF). Force `.warnings` to observe it.
   flake.tests.merge-strategy.test-validator-error-throws = {
     expr =
       let
@@ -78,11 +81,13 @@ in
           provenance = { };
         };
       in
-      !(builtins.tryEval (validator {
-        config._module.args = {
-          host = "x";
-        };
-      })).success;
+      !(builtins.tryEval (
+        (validator {
+          config._module.args = {
+            host = "x";
+          };
+        }).warnings
+      )).success;
     expected = true;
   };
 }
