@@ -363,7 +363,7 @@ Contracts are pre-computed once and shared across all modules. Returns `{ module
 - `modules` — list of wrapped modules
 - `validators` — list of non-null validators
 - `signatures` — list of signatures (one per module)
-- `all` — `modules ++ validators` (flat list of wrapped modules and non-null validators)
+- `all` — `modules ++ validators` (flat list of wrapped modules and non-null validators), ready to pass directly to `evalModules`; the validators emit lazy `warnings` and do no work at module-collection WHNF
 
 ### `mkThunk`
 
@@ -450,7 +450,7 @@ mergeStrategy.fromBindings bindings
 mkMergeValidator { resolvePolicy; boundArgNames; provenance; }
 ```
 
-Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. Error-strategy collisions throw immediately (`builtins.seq` forces the check list to WHNF). Bind-wins and system-wins collisions produce warning strings in `.warnings`.
+Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the `config._module.args` probe runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced.
 
 ### `provenance.format`
 
