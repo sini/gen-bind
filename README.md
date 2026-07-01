@@ -1,4 +1,4 @@
-# gen-bind
+# gen-bind — module binding with external arguments for Nix
 
 [![CI](https://github.com/sini/gen-bind/actions/workflows/ci.yml/badge.svg)](https://github.com/sini/gen-bind/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github)](https://github.com/sponsors/sini)
 
@@ -6,11 +6,12 @@ Module binding with external arguments for Nix — partial application of bindin
 
 gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` introspection to inject only the args a module actually declares, merge strategy control when bindings collide with module-system args, contract assertions that fire on demand rather than at wrap time, and provenance tracking that names the source in every error message.
 
-gen-bind is **nixpkgs-lib-free**: its only dependency is [gen-prelude](https://github.com/sini/gen-prelude) (pure, zero-input). It remains module-system-*aware* — not -*dependent* — emitting modules in the nixpkgs `__functionArgs`/`_file`/`key` convention via two helpers vendored locally in `lib/module-convention.nix`, with no `nixpkgs.lib` import. A CI purity invariant and an `evalModules` equivalence test keep that boundary honest.
+gen-bind is a **nixpkgs-lib-free Class B** library: its only dependency is [gen-prelude](https://github.com/sini/gen-prelude) (pure, zero-input). It remains module-system-*aware* — not -*dependent* — emitting modules in the nixpkgs `__functionArgs`/`_file`/`key` convention via two helpers vendored locally in `lib/module-convention.nix`, with no `nixpkgs.lib` import. A CI `purity` invariant and an `evalModules` equivalence test keep that boundary honest.
 
 ## Table of Contents
 
 - [Terminology](#terminology)
+- [Overview](#overview)
 - [Gen Ecosystem](#gen-ecosystem)
 - [Quick Start](#quick-start)
 - [Core Concepts](#core-concepts)
@@ -43,6 +44,30 @@ gen-bind is **nixpkgs-lib-free**: its only dependency is [gen-prelude](https://g
 | Provenance | Source-tracking metadata surfaced in blame messages on collision or violation |
 | Signature | Static record of what a module requires, what was bound, and what remains |
 
+## Overview
+
+A NixOS module is a function `{ arg1, arg2, ... }: { ...config... }` whose formal
+parameters are resolved by `evalModules` from `specialArgs` and `_module.args`. gen-bind
+sits *in front of* that resolution: it takes a module plus a set of named **bindings** and
+partially applies the bindings the module actually declares — determined by
+`builtins.functionArgs` introspection, never by evaluating the values — leaving every other
+arg for `evalModules` to supply as normal.
+
+The mental model is a single pipeline over four parallel keyed maps, all indexed by binding
+arg name:
+
+- **bindings** — the external values to inject (`{ host = ...; }`),
+- **contracts** — lazy per-binding assertions that fire only when the arg is demanded,
+- **provenance** — blame metadata that names the source in every error message,
+- **mergeStrategies** — collision policy when a binding name shadows a module-system arg.
+
+`wrap` (single module) and `wrapAll` (batch) consume those maps and return a record
+`{ module; wrapped; validator; signature; advertisedArgs }`. `compose`/`composeWith` merge
+binding sources upstream; `mkThunk` defers a binding that depends on the `config` fixpoint;
+`wrapIdentity` and `stripBindingArgs` post-process the wrapped module for NixOS key-dedup
+and advertised-arg hygiene. Nothing in the pipeline forces a binding value that the target
+module does not demand, so unbuilt hosts carry zero binding cost.
+
 ## Gen Ecosystem
 
 | Library | Role |
@@ -54,7 +79,7 @@ gen-bind is **nixpkgs-lib-free**: its only dependency is [gen-prelude](https://g
 | [gen-scope](https://github.com/sini/gen-scope) | HOAG scope-graph evaluator (demand-driven, \_eval memoization, circular attributes) |
 | [gen-graph](https://github.com/sini/gen-graph) | Accessor-based graph query combinators (traversal, condensation, phaseOrder) |
 | [gen-select](https://github.com/sini/gen-select) | Selector algebra (pattern matching over graph positions) |
-| [gen-bind](https://github.com/sini/gen-bind) | Module binding (inject external args into NixOS modules) |
+| [gen-bind](https://github.com/sini/gen-bind) | **This lib** — Module binding (inject external args into NixOS modules) |
 | [gen-dispatch](https://github.com/sini/gen-dispatch) | Relational rule dispatch STEP (stratified phases, conflict resolution) |
 | [gen-resolve](https://github.com/sini/gen-resolve) | Demand-driven RAG evaluator over scope graphs (attribute schedule + convergence loop) |
 | [gen-rebuild](https://github.com/sini/gen-rebuild) | Pure-Nix incremental rebuilder (change propagation, AFFECTED set) |
@@ -557,19 +582,23 @@ lib/
 
 ## Testing
 
-Tests use nix-unit in `ci/` (which keeps a `nixpkgs` dependency for the test runner and
-the real `lib.evalModules` driven by the production-safety equivalence gate):
+**65 tests across 12 suites** — `compose`, `contract`, `evalmodules-equivalence`,
+`identity`, `integration`, `merge-strategy`, `provenance`, `purity`, `signature`, `strip`,
+`thunk`, `wrap`. Tests use nix-unit in `ci/` (which keeps a `nixpkgs` dependency for the
+test runner and the real `lib.evalModules` driven by the production-safety equivalence
+gate):
 
 ```bash
 cd ci
-nix run nixpkgs#nix-unit -- --flake .#tests            # all suites
+nix run nixpkgs#nix-unit -- --flake .#tests            # all 65, across 12 suites
 nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
 nix flake check                                        # full check incl. treefmt
 ```
 
-The `purity` suite enforces that the library source imports no `nixpkgs.lib`, and the
-`evalmodules-equivalence` suite drives gen-bind output through a real `lib.evalModules`
-to prove the vendored convention helpers stay byte-behavior-identical.
+The `purity` suite enforces the nixpkgs-lib-free Class B boundary — the library source
+imports no `nixpkgs.lib` — and the `evalmodules-equivalence` suite drives gen-bind output
+through a real `lib.evalModules` to prove the vendored convention helpers stay
+byte-behavior-identical.
 
 ## Theoretical Foundations
 
