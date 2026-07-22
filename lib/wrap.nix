@@ -150,9 +150,30 @@ let
         remainingArgs = builtins.removeAttrs moduleArgs boundArgNames;
       in
       if allMatched then
-        # Fully applied — call immediately, result is an attrset module
+        # Fully applied — call immediately, result is an attrset module.
+        # The fully-applied path is thunk-aware (consistent with the partial-app
+        # branch below): a bound arg may still carry a __configThunk (e.g. a
+        # channel-only consumer `{ ch, ... }` whose every named formal is bound,
+        # so allMatched holds, yet `ch` is a producer-emitted config-thunk). When
+        # hasThunks, resolve over the bound args BEFORE applying. producerConfigs
+        # is self-sufficient for __sourceScope thunks (they resolve against the
+        # PRODUCER config, not a consumer config) — the actual target here. A
+        # null-scope thunk on this path has no evalModules `config` to read (if it
+        # needed one it would require `config` as an UNBOUND formal, routing it to
+        # the partial-app path); it resolves against a bound `config` arg if one
+        # was supplied, else `{}` — a documented ~vacuous edge.
         let
-          applied = module (systemWinsArgs // bindWinsArgs);
+          resolvedBind =
+            if hasThunks then
+              thunkLib.resolveThunks {
+                config = systemWinsArgs.config or bindWinsArgs.config or { };
+                ctx = bindings;
+                inherit thunkArgNames producerConfigs;
+                bindings = bindWinsArgs;
+              }
+            else
+              bindWinsArgs;
+          applied = module (systemWinsArgs // resolvedBind);
         in
         {
           module = applied;

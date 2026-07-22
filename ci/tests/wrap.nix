@@ -58,6 +58,81 @@ in
     };
   };
 
+  # Fully-applied path is thunk-aware. A channel-only consumer `{ ch, ... }`
+  # (ellipsis absent from functionArgs; the single named formal `ch` is bound ⇒
+  # allMatched) carries a producer-emitted config-thunk in `ch`. The fully-applied
+  # branch resolves it against producerConfigs BEFORE calling the module.
+  flake.tests.wrap.test-fully-applied-config-thunk-producer-scoped = {
+    expr =
+      (wrap {
+        module =
+          { ch, ... }:
+          {
+            out = builtins.head ch;
+          };
+        bindings = {
+          ch = [
+            (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
+          ];
+        };
+        producerConfigs = {
+          "host=iceberg" = {
+            networking.hostName = "iceberg";
+          };
+        };
+      }).module.out;
+    expected = "h-iceberg";
+  };
+
+  # Back-compat: a fully-applied module with NO thunks is unchanged even when a
+  # non-empty producerConfigs is supplied — resolveThunks is never invoked
+  # (hasThunks = false), so the bound args apply byte-identically.
+  flake.tests.wrap.test-fully-applied-no-thunk-byte-identical = {
+    expr =
+      (wrap {
+        module =
+          { host }:
+          {
+            networking.hostName = host.name;
+          };
+        bindings = {
+          host = {
+            name = "igloo";
+          };
+        };
+        producerConfigs = {
+          "host=iceberg" = {
+            networking.hostName = "iceberg";
+          };
+        };
+      }).module.networking.hostName;
+    expected = "igloo";
+  };
+
+  # Documented edge: a null-scope thunk on the fully-applied path has no
+  # evalModules `config` (that would require `config` as an UNBOUND formal, which
+  # routes to the partial-app path). If a `config` arg is BOUND, the thunk resolves
+  # against it; otherwise it would see `{}`. Here `config` is bound ⇒ used.
+  flake.tests.wrap.test-fully-applied-null-scope-thunk-uses-bound-config = {
+    expr =
+      (wrap {
+        module =
+          { ch, config, ... }:
+          {
+            out = builtins.head ch;
+          };
+        bindings = {
+          ch = [
+            (genBind.mkThunk ({ config, ... }: [ config.networking.hostName ]))
+          ];
+          config = {
+            networking.hostName = "bound-cfg";
+          };
+        };
+      }).module.out;
+    expected = "bound-cfg";
+  };
+
   flake.tests.wrap.test-attrset-passthrough = {
     expr =
       (wrap {
