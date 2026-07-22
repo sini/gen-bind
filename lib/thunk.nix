@@ -28,12 +28,31 @@
   # For each arg name in thunkArgNames whose binding value is a list,
   # expand any thunk entries by calling __fn with context args + config.
   # Non-list args and args not in thunkArgNames pass through unchanged.
+  #
+  # Producer-scoped resolution (Söderberg & Hedin 2013, CHORAG §5.1 —
+  # materialization-as-attribution over the static AST): a thunk stamped with a
+  # source scope (via `mkThunkFrom`) represents a value emitted at a PRODUCER
+  # terminal but consumed at a different one. When the caller supplies that
+  # scope's config in `producerConfigs`, __fn resolves against the PRODUCER's
+  # config — the value materializes over the terminal that emitted it, not the
+  # one consuming it. Absent that (the default `producerConfigs = {}`, or a
+  # `__sourceScope == null` thunk, or a scope the caller did not supply),
+  # resolution falls back to the consumer `config` exactly as before —
+  # byte-identical to the pre-producerConfigs behavior. gen-bind stays GENERAL:
+  # it takes an opaque scopeKey→config map and does one lazy index; the caller
+  # (e.g. den-hoag) builds the map — encoding class into the key if a scope has
+  # multiple class terminals. Laziness (A17): the lookup is a single lazy attrset
+  # index, and the producer config is forced only to the depth __fn reads, at the
+  # consumer, on demand — no eager force at wrap time. A genuine cross-terminal
+  # cycle (the producer config transitively demands this same thunk) surfaces as
+  # Nix's own LOUD `infinite recursion encountered`, never a silent stale read.
   resolveThunks =
     {
       config,
       ctx,
       thunkArgNames,
       bindings,
+      producerConfigs ? { },
     }:
     builtins.mapAttrs (
       k: v:
@@ -46,7 +65,13 @@
               ctxArgs = prelude.genAttrs (builtins.filter (ak: ctx ? ${ak}) (builtins.attrNames thunkArgs)) (
                 ak: ctx.${ak}
               );
-              result = entry.__fn (ctxArgs // { inherit config; });
+              sourceScope = entry.__sourceScope or null;
+              targetConfig =
+                if sourceScope != null && producerConfigs ? ${sourceScope} then
+                  producerConfigs.${sourceScope}
+                else
+                  config;
+              result = entry.__fn (ctxArgs // { config = targetConfig; });
             in
             if builtins.isList result then result else [ result ]
           else

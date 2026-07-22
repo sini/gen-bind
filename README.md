@@ -222,6 +222,31 @@ Thunks travel as markers (`{ __configThunk = true; __fn = fn; }`) through the bi
 
 `mkThunkFrom scopeId fn` creates a thunk annotated with a source scope for tracing.
 
+#### Producer-scoped resolution
+
+By default a thunk resolves against the `config` of the terminal that *consumes* it. When a config-dependent value is produced at one terminal but delivered to another (a value broadcast/exposed/routed across hosts or user-cells), the consumer's `config` is the wrong one to read. Pass an optional `producerConfigs` map — an opaque `scopeKey → config` attrset — so a `mkThunkFrom scope fn` thunk resolves against the *producer's* config instead:
+
+```nix
+result = genBind.wrap {
+  module = { peers, config, ... }: { networking.domain = builtins.head peers; };
+  bindings = {
+    peers = [
+      # Produced at iceberg, consumed at igloo. __sourceScope = "host=iceberg".
+      (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
+    ];
+  };
+  # Resolve the thunk against iceberg's terminal config, not igloo's:
+  producerConfigs = {
+    "host=iceberg" = icebergTerminalConfig;  # a lazy ref to the producer's config
+  };
+};
+```
+
+- **Opaque + general.** gen-bind does one lazy attrset index (`producerConfigs.${thunk.__sourceScope}`); it knows nothing about scopes, classes, or hosts. The consumer builds the map and chooses the key encoding — a scope with multiple class terminals (e.g. a host's `nixos` vs a user-cell's `home-manager`) must qualify the key so each thunk's `__sourceScope` selects the right terminal.
+- **Back-compat.** The default `producerConfigs = {}` is byte-identical to the prior behavior: every thunk resolves against the consumer `config`. A plain `mkThunk` thunk (`__sourceScope = null`) always resolves against the consumer config, even when a non-empty map is supplied; a `mkThunkFrom` thunk whose scope is absent from the map falls back to the consumer config.
+- **Lazy (A17).** Supply `producerConfigs` as a lazy `lib.fix`/`genAttrs` over your terminals. gen-bind never forces a producer config at wrap time — it is read only to the depth `__fn` demands, at the consumer, on resolve.
+- **Loud on genuine cycle.** An acyclic-at-use cross-terminal read (the producer value does not read back into the consumer) resolves cleanly — Nix's own `lib.fix` ties the knot. A genuine cross-terminal cycle (the producer config transitively demands the same thunk) surfaces as Nix's `infinite recursion encountered` — loud and `tryEval`-uncatchable, never a silent stale read. (Theory: Söderberg & Hedin 2013 CHORAG §5.1 — materialization-as-attribution; let the host's lazy fixpoint be the cross-terminal solver.)
+
 ### Lazy Contracts
 
 Contracts are assertions that fire only when the bound value is demanded — preserving Nix's lazy evaluation semantics. Unbuilt modules have zero contract cost.
@@ -424,10 +449,12 @@ Returns `true` if `value` is a thunk created by `mkThunk` or `mkThunkFrom`.
 ### `resolveThunks`
 
 ```nix
-resolveThunks { config; ctx; thunkArgNames; bindings; }
+resolveThunks { config; ctx; thunkArgNames; bindings; producerConfigs ? {}; }
 ```
 
 Resolves thunks within list-valued bindings. For each arg name in `thunkArgNames` whose binding is a list, expands thunk entries by calling `__fn` with `config` and matching `ctx` args. Non-thunk entries and non-list args pass through unchanged.
+
+`producerConfigs` (optional, default `{}`) is a `scopeKey → config` map for producer-scoped resolution: a thunk whose `__sourceScope` (from `mkThunkFrom`) is a key in the map resolves against `producerConfigs.<scope>` (the producer's config) instead of the consumer `config`. Default `{}` ⇒ every thunk resolves against the consumer `config` (byte-identical to the prior behavior); a `null`-scope thunk or an absent scope also falls back to the consumer `config`. See [Producer-scoped resolution](#producer-scoped-resolution).
 
 ### `contract.mk`
 

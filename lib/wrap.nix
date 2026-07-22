@@ -24,6 +24,10 @@ let
     mergeStrategies = { };
     defaultMergeStrategy = mergeStrategyLib.mergeStrategy.bindWins;
     thunkBindings = null;
+    # Optional scopeKey→config map for producer-scoped thunk resolution
+    # (CHORAG §5.1). Default {} ⇒ thunks resolve against the consumer config,
+    # byte-identical to the pre-producerConfigs behavior. See thunk.nix.
+    producerConfigs = { };
   };
 
   # Chitil 2012 §2: lazy contract application via genAttrs.
@@ -85,6 +89,7 @@ let
         mergeStrategies
         defaultMergeStrategy
         thunkBindings
+        producerConfigs
         ;
       moduleArgs = builtins.functionArgs module;
       moduleArgNames = builtins.attrNames moduleArgs;
@@ -166,7 +171,7 @@ let
                   thunkLib.resolveThunks {
                     config = moduleCallArgs.config or { };
                     ctx = bindings;
-                    inherit thunkArgNames;
+                    inherit thunkArgNames producerConfigs;
                     bindings = bindWinsArgs;
                   }
                 else
