@@ -66,8 +66,13 @@
                 ak: ctx.${ak}
               );
               sourceScope = entry.__sourceScope or null;
+              # The scope key must be a STRING to index producerConfigs. A non-string
+              # __sourceScope (a caller that stamped a structured scope rather than a
+              # flat key) falls back to the consumer config — a graceful degrade, not a
+              # `cannot coerce a set to a string` throw. gen-bind stays agnostic about
+              # the key SHAPE the caller chose; it only indexes when the key is usable.
               targetConfig =
-                if sourceScope != null && producerConfigs ? ${sourceScope} then
+                if sourceScope != null && builtins.isString sourceScope && producerConfigs ? ${sourceScope} then
                   producerConfigs.${sourceScope}
                 else
                   config;

@@ -234,4 +234,44 @@ in
       )).success;
     expected = false;
   };
+
+  # Non-string __sourceScope degrades gracefully. A caller may stamp a structured
+  # scope (an attrset) rather than a flat string key; indexing producerConfigs with
+  # it would `cannot coerce a set to a string`. The isString guard makes such a
+  # thunk fall back to the consumer config instead of throwing — the key SHAPE is
+  # the caller's business, gen-bind only indexes a usable (string) key. deepSeq
+  # forces the whole result to prove no latent coercion throw survives.
+  flake.tests.thunk.test-resolveThunks-non-string-scope-falls-back = {
+    expr = (
+      builtins.tryEval (
+        let
+          r = resolveThunks {
+            config = {
+              networking.hostName = "igloo";
+            };
+            ctx = { };
+            thunkArgNames = [ "data" ];
+            producerConfigs = {
+              "host=iceberg" = {
+                networking.hostName = "iceberg";
+              };
+            };
+            bindings = {
+              data = [
+                (mkThunkFrom { host = "iceberg"; } ({ config, ... }: [ config.networking.hostName ]))
+              ];
+            };
+          };
+        in
+        builtins.deepSeq r r
+      )
+    );
+    # Succeeds (no coercion throw) AND resolves against the consumer config.
+    expected = {
+      success = true;
+      value = {
+        data = [ "igloo" ];
+      };
+    };
+  };
 }
