@@ -26,6 +26,7 @@ gen-bind is a **nixpkgs-lib-free Class B** library: its only dependency is [gen-
   - [Identity Wrapping](#identity-wrapping)
   - [Arg Stripping](#arg-stripping)
   - [Batch Wrapping](#batch-wrapping)
+  - [Terminal-Crossing Arg-Environment](#terminal-crossing-arg-environment)
 - [API Reference](#api-reference)
 - [Laziness Guarantees](#laziness-guarantees)
 - [Architecture](#architecture)
@@ -378,6 +379,43 @@ batch = genBind.wrapAll {
 # batch.all        — wrapped modules ++ non-null validators (flat list)
 ```
 
+### Terminal-Crossing Arg-Environment
+
+`wrap`/`mkThunk` rewrite a module's FORMAL parameters *before* `evalModules`. But a reach/delivery edge that crosses a module-system boundary must rewrite the **arg environment** the placed slice resolves against **at** the `evalModules` boundary (`_module.args` / `specialArgs`), and may **gate** the slice's resolved config on an eval-time predicate. Content rewriters (gen-edge's `adapt`: content → Π → content, run in the pre-eval fold) structurally cannot reach that boundary — they never see `_module.args`/`specialArgs`. Three primitives do:
+
+```nix
+# adaptArgs — inject `_module.args = adapt args` alongside a placed slice (the in-module
+# arg-env channel). `adapt` reads the crossing args (config/pkgs/lib/specialArgs).
+adaptedModule = genBind.adaptArgs {
+  adapt = args: { allModuleArgs = args.config.allModuleArgs; };
+  module = placedSlice;
+};
+
+# crossEval — resolve an OPAQUE slice through a nested evalModules in the TERMINAL's own
+# evaluator (`lib` threaded in), threading a rewritten `specialArgs` env + a freeform
+# absorber. Returns the eval result; read `.config`.
+resolved = (genBind.crossEval {
+  inherit (args) lib;
+  module = sliceMod;
+  specialArgs = adaptedSpecialArgs;
+}).config;
+
+# configGate — gate a slice's nested-eval'd CONFIG on an eval-time predicate via `mkIf`.
+gated = genBind.configGate {
+  gate = args: args.options ? wsl;   # eval-time read of the terminal option-set
+  module = placedSlice;
+  adapt = args: { extra = args.pkgs.hello; };  # optional _module.args threading
+};
+```
+
+**The two arg-env channels.** `_module.args` is the only channel a module can write from *inside* the eval (`adaptArgs`); `specialArgs` is caller-only, so rewriting it means *owning* the `evalModules` call — which is what `crossEval` is for.
+
+**★ Load-bearing module-system bound.** `configGate` gates **config** (`mkIf`), never `imports`. Gating `imports` on a predicate that reads `options`/`config` is the fixpoint cycle `imports ← guard(options) ← options ← imports`. `mkIf` leaves `imports` unconditional, so the outer `options` set stays guard-independent. **Consequence:** a config-gate can conditionally *supply* config but **cannot** conditionally *declare* an option — a gated slice's option declarations live in the nested eval and never reach the outer option-set. The common case (a slice contributes config; the guard checks an option declared *elsewhere*) is sound; conditional option declaration is unsupported **by construction** — a module-system bound, not a gen-bind limit.
+
+**Purity.** These primitives operate the module system *only via a `lib` threaded in at the crossing* (`crossEval`'s `lib` param; the module functions' `args.lib`) — gen-bind still imports no `nixpkgs.lib`. The `purity` suite scopes its module-system-token ban to exempt this one crossing file while keeping the `nixpkgs`-dependency ban global.
+
+**Charter (ratified).** gen-bind's charter is now **binding injection + terminal-crossing arg-environment**. `lib/arg-env.nix` is the **sole, deliberately-ratified module-*evaluating* file** — it drives a nested `evalModules` at the reach/delivery boundary; every other `lib/` file remains module-*producing* under the full purity ban. Two invariants keep this bounded: **(P1) no nixpkgs dependency** — global and unconditional, gen-bind imports no `nixpkgs.lib` (the `lib` is always runtime-threaded, never a file parameter); **(P2) never operates the module system** — relaxed for `arg-env.nix` *by design*, and for no other file. The `purity` suite whitelists exactly the two tokens `arg-env.nix` uses (`lib.`, `evalModules`) and keeps `{ lib }`/`{ lib,`/`mkOption`/`nixpkgs` banned even there, so the exemption is a documented, single-file decision — **not a precedent for module-system creep**.
+
 ## API Reference
 
 ### `wrap`
@@ -566,12 +604,45 @@ Computes a signature record: `{ requires; bound; unsatisfied; mergeStrategies }`
 - `unsatisfied` — arg names in vocabulary but not injected and not optional (currently always `[]` with the standard API)
 - `mergeStrategies` — per-bound-arg strategy
 
+### `adaptArgs`
+
+```nix
+adaptArgs { adapt, module }  # -> terminalArgs -> module
+```
+
+Returns a terminal module-function that, at the `evalModules` crossing, injects `_module.args = adapt args` (visible to every sibling module) and imports `module`. `adapt : crossingArgs -> attrset` derives the extended arg environment from the terminal args (`config`/`options`/`pkgs`/`lib`/`specialArgs`). `_module.args` is the only arg-env channel a module can write from inside the eval. Laziness: `adapt` and `module` are forced only when the returned function is applied by `evalModules`.
+
+### `crossEval`
+
+```nix
+crossEval { lib, module, specialArgs ? {}, moduleArgs ? null, absorb ? true }  # -> evalModules result
+```
+
+Resolves an **opaque** `module` through a fresh nested `evalModules` in the terminal's own evaluator (`lib` threaded in — gen-bind imports no `nixpkgs.lib`), returning the eval result (read `.config`). This is what the `specialArgs` arg-env channel requires: `specialArgs` is caller-only, so rewriting it means owning the `evalModules` call.
+
+- `specialArgs` — the caller-only arg env, available during imports resolution.
+- `moduleArgs` — a config-level `_module.args` env (`null` ⇒ omit; `{}` threads an empty env).
+- `absorb` — install a freeform absorber (`types.lazyAttrsOf types.raw`) so the opaque slice's config keys land regardless of the terminal type universe (nixpkgs / gen-merge). Default `true`.
+
+Laziness: `evalModules` builds config lazily; the result is a WHNF attrset and no slice config value is forced until `.config.<key>` is demanded.
+
+### `configGate`
+
+```nix
+configGate { gate, module, adapt ? (_: {}), absorb ? true }  # -> terminalArgs -> module
+```
+
+Returns a terminal module-function that resolves `module` in a nested `crossEval` (threading `adapt args` as its `_module.args`) and contributes the result via `mkIf (gate args) nested.config`. `gate : crossingArgs -> bool` is the eval-time predicate.
+
+**★ The gate gates `config` (`mkIf`), never `imports`** — gating imports on a predicate that reads `options`/`config` is the fixpoint cycle `imports ← guard(options) ← options ← imports`. So a config-gate can conditionally supply config but **cannot** conditionally declare an option (a gated slice's option declarations stay in the nested eval). The common case — the guard checks an option declared *elsewhere* and gates *other* content — is sound; conditional option declaration is unsupported by construction (a module-system bound). Laziness: `gate`, `module`, `adapt` are forced only when the returned function is applied.
+
 ## Laziness Guarantees
 
 - Binding values are never forced at `wrap` time — `builtins.functionArgs` introspects without evaluating.
 - Per-arg injection uses `//` semantics — only args the module actually demands are forced.
 - Contracts fire on demand only — the contract thunk wraps the binding value in an `assert`; if the module never demands the arg, the contract never runs.
 - Unbuilt hosts have zero cost — thunks in list bindings resolve only when the wrapper function is called by `evalModules`.
+- Terminal-crossing transforms force nothing at construction — `adaptArgs`/`configGate` return a module-function; `adapt`/`gate`/`module` are forced only when `evalModules` applies it.
 
 ## Architecture
 
@@ -592,6 +663,11 @@ wrap / wrapAll
       wrapIdentity — NixOS key stamping (cf. Cardelli 1997 §5)
       stripBindingArgs — formal arg cleanup
       mkMergeValidator — collision detection with blame (cf. Findler 2002 §2)
+
+Terminal-crossing arg-environment (reach/delivery edges, at the evalModules boundary)
+      adaptArgs — inject `_module.args = adapt args` alongside a placed slice
+      crossEval — nested evalModules in the terminal's `lib` (specialArgs / freeform absorber)
+      configGate — mkIf-gate a slice's nested-eval'd config (cf. Cardelli 1997 §5 linkset)
 ```
 
 ### File Layout
@@ -608,20 +684,21 @@ lib/
   identity.nix          — NixOS module identity wrapping
   strip.nix             — binding arg stripping for NixOS compatibility
   signature.nix         — module signature inference
+  arg-env.nix           — terminal-crossing arg-environment transforms (adaptArgs, crossEval, configGate)
   module-convention.nix — vendored nixpkgs convention helpers (setFunctionArgs, setDefaultModuleLocation)
 ```
 
 ## Testing
 
-**65 tests across 12 suites** — `compose`, `contract`, `evalmodules-equivalence`,
+**87 tests across 13 suites** — `arg-env`, `compose`, `contract`, `evalmodules-equivalence`,
 `identity`, `integration`, `merge-strategy`, `provenance`, `purity`, `signature`, `strip`,
 `thunk`, `wrap`. Tests use nix-unit in `ci/` (which keeps a `nixpkgs` dependency for the
 test runner and the real `lib.evalModules` driven by the production-safety equivalence
-gate):
+gate and the `arg-env` crossing suite):
 
 ```bash
 cd ci
-nix run nixpkgs#nix-unit -- --flake .#tests            # all 65, across 12 suites
+nix run nixpkgs#nix-unit -- --flake .#tests            # all 87, across 13 suites
 nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
 nix flake check                                        # full check incl. treefmt
 ```

@@ -9,8 +9,10 @@ let
   stripLib = import ./strip.nix { inherit prelude; };
   signatureLib = import ./signature.nix { inherit prelude; };
   wrapLib = import ./wrap.nix { inherit prelude; };
+  argEnvLib = import ./arg-env.nix { };
 in
 {
+  inherit (argEnvLib) adaptArgs crossEval configGate;
   inherit (thunkLib)
     mkThunk
     mkThunkFrom

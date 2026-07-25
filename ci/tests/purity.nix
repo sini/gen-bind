@@ -46,9 +46,41 @@ let
     "mkOption" # module-system tier
   ];
 
+  # arg-env.nix is the ONE module-system-OPERATING file: `crossEval`/`configGate` drive a
+  # NESTED `evalModules` and call `mkIf`/`types` at the terminal crossing — but ONLY via a
+  # `lib` THREADED IN at runtime (crossEval's `lib` parameter; the module functions'
+  # `args.lib`), NEVER an imported `nixpkgs.lib`. Its file signature is `{ ... }:` and the lib
+  # is wired as `import ./arg-env.nix { }` (no lib passed at the file boundary), so it CANNOT
+  # receive nixpkgs at import — structurally lib-import-free.
+  #
+  # The exemption whitelists EXACTLY the two tokens this file legitimately uses — `lib.` (the
+  # threaded lib's members) and `evalModules` (the nested eval). Every OTHER forbidden token
+  # stays banned even here, deliberately:
+  #   - `{ lib }` / `{ lib,` — a file-sig change to `{ lib, ... }:` (which nixfmt renders
+  #     single-line, matching `{ lib,`) would inject nixpkgs.lib as a DEPENDENCY yet still
+  #     ride the `lib.`/`evalModules` exemption. Keeping the sig tokens banned closes that
+  #     latent regression: the lib must stay RUNTIME-THREADED, never a file parameter.
+  #   - `mkOption` — this file EVALUATES modules; it must never DECLARE options.
+  #   - `nixpkgs` — P1 (no-nixpkgs-dependency) stays global, unconditionally.
+  # So "no nixpkgs DEPENDENCY" holds for every file; only "never operates the module system"
+  # is relaxed, for THIS one crossing file, BY DESIGN (gen-bind G4 charter — see README).
+  moduleSystemOperators = [ "arg-env.nix" ];
+  argEnvExempt = [
+    "lib."
+    "evalModules"
+  ];
+  forbiddenFor =
+    name:
+    if lib.elem name moduleSystemOperators then
+      lib.filter (tok: !(lib.elem tok argEnvExempt)) forbidden
+    else
+      forbidden;
+
   violations = lib.concatMap (
     src:
-    map (tok: "${src.name}: '${tok}'") (lib.filter (tok: genPrelude.hasInfix tok src.code) forbidden)
+    map (tok: "${src.name}: '${tok}'") (
+      lib.filter (tok: genPrelude.hasInfix tok src.code) (forbiddenFor src.name)
+    )
   ) sources;
 in
 {
