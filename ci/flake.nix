@@ -1,6 +1,6 @@
 {
   inputs = {
-    gen.url = "github:sini/gen";
+    gen-harness.url = "github:sini/gen-harness";
     gen-prelude.url = "github:sini/gen-prelude";
     # nixpkgs is the CI runner's dependency (test harness, treefmt) and supplies the
     # REAL `lib.evalModules` the equivalence gate drives gen-bind output through. The
@@ -10,7 +10,7 @@
 
   outputs =
     inputs@{
-      gen,
+      gen-harness,
       gen-prelude,
       ...
     }:
@@ -18,7 +18,7 @@
       prelude = import "${gen-prelude}/lib";
       genBind = import ../lib { inherit prelude; };
     in
-    gen.lib.mkCi {
+    gen-harness.lib.mkCi {
       inherit inputs;
       name = "gen-bind";
       testModules = ./tests;
