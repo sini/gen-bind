@@ -10,8 +10,14 @@ let
   signatureLib = import ./signature.nix { inherit prelude; };
   wrapLib = import ./wrap.nix { inherit prelude; };
   argEnvLib = import ./arg-env.nix { };
+  crossingLib = import ./crossing.nix { inherit prelude; };
 in
 {
+  # The boundary crossing: the crossing node, its derived demand relation, the
+  # body-term algebra, first-order contracts, the Adapter, the Linkset, and the
+  # six operations. Namespaced because it is a surface, not a helper.
+  crossing = crossingLib;
+
   inherit (argEnvLib) adaptArgs crossEval configGate;
   inherit (thunkLib)
     mkThunk

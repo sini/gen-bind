@@ -2,7 +2,7 @@
 
 ## Scope
 
-Partial application of external bindings into Nix module functions: inspects a module's formal parameters (`builtins.functionArgs`), injects matching bindings, and re-advertises the residual interface in the nixpkgs `__functionArgs`/`_file` convention — plus three primitives that rewrite the arg environment *at* an `evalModules` crossing.
+Partial application of external bindings into Nix module functions: inspects a module's formal parameters (`builtins.functionArgs`), injects matching bindings, and re-advertises the residual interface in the nixpkgs `__functionArgs`/`_file` convention — plus three primitives that rewrite the arg environment *at* an `evalModules` crossing, plus the **boundary crossing** surface (`genBind.crossing`): the crossing node, its derived demand relation over a closed first-order body-term algebra, first-order contracts checked substrate-side, the Adapter, the fleet Linkset, and the six operations `declare`/`merge`/`gate`/`link`/`close`/`residue`.
 
 ## Not this library's job
 
@@ -97,6 +97,31 @@ Entry: `inputs.gen-bind.lib` (flake). Root `default.nix` is a FUNCTION `{ prelud
 | `crossEval` | `{ lib, module, specialArgs ? {}, moduleArgs ? null, absorb ? true } -> evalResult` (read `.config`) |
 | `configGate` | `{ gate, module, adapt ? (_: {}), absorb ? true } -> crossingArgs -> { config; }` |
 
+**Boundary crossing** — `lib/crossing.nix` + `lib/crossing-*.nix`, namespaced under `genBind.crossing`
+
+The mechanism by which a substrate-resolved value enters an eval gen does not own. A crossing is a NODE — the reified relation between an import declaration, a BINDING and a consuming target — and its demand set is DERIVED by structural recursion over a closed first-order term algebra, never declared.
+
+| Export | Signature |
+|---|---|
+| `crossing.term.*` | `lit` (walks + FORCES the payload at minting; refuses a function, a derivation at any node, a budget overrun or a throwing field) · `readFrom target path` (the ONLY unit-naming former) · `readCtx head path` · `ifThenElse c a b` · `attrs` · `list` · `concat` (string-only) · `pathJoin head segments` (the only path-producing former) · `apply prim operands` |
+| `crossing.binding.*` | `plain { value; mark; }` · `termed { term; mark; }` · `scoped { file; scope; producer; mark; }` · `wrapped { producer; body; mark; }` — `mark` is TOTAL, no default |
+| `crossing.registerSupply` | `{ bindings; proposals; origins; } -> Result { supply; heights; projection; }` — stratifies, refuses a sibling cycle, mints the projection |
+| `crossing.strata` | `bindings -> Result (AttrsOf Int)` — the canonical HEIGHT function |
+| `crossing.demands` / `.deltaExact` / `.isExact` | `projection -> name -> [TargetId]` / `"EXACT"\|"APPROX"` / `bool` |
+| ★ `crossing.mkOperations` | `{ hashIdentity } -> Result { declare; merge; gate; link; close; residue; }` — **the only way to reach an operation.** `hashIdentity` is TOTAL, no default; omitting it refuses by name |
+| ↳ `declare` | `Signature -> Body -> Result Fragment` |
+| ↳ `merge` | `Fragment -> Fragment -> Result Fragment` |
+| ↳ `gate` | `{ enum; select; branches; } -> Result Fragment` |
+| ↳ `link` | `TargetId -> DeltaProjection -> Supply -> Fragment -> Result Fragment` |
+| ↳ `close` | `TargetId -> DeltaProjection -> Linkset -> Adapter -> Fragment -> Result TargetUnit` |
+| ↳ `residue` | `Fragment -> Signature` |
+| `crossing.mkAdapter` / `.placement` | adapter totality check / the `(Channel, Time)` table, which takes `staticityAdmissible` **and** `deltaExact` |
+| `crossing.mkLinkset` / `.environment` / `.linked` / `.coherence` | the fleet, `E(u)`, the alone-shipping predicate, the containment refusal |
+| `crossing.contractTerm.*` / `.interpret` / `.checkContract` | `any` `never` `prop` `attrs` `list` `and` `orElse`; the eager, complete interpreter; the vocabulary gate |
+| `crossing.isOk` / `.isRefusal` / `.codes` / `.party` | the Either discriminators and the refusal vocabularies |
+
+★★ **THE PUBLISHED SURFACE SHIPS NO MINTING FORMULA AND NO BOUND OPERATION.** ADR-0016 gives the substrate ONE minting authority; a formula shipped here as a convenience default would be a SECOND one, reachable by any consumer who simply omitted the injection — and the omission would be invisible at the call site. So the operation set exists only once a consumer injects the mint, and `mkOperations` refuses by name when it is absent or is not a function. The test suite injects a stand-in explicitly from `ci/tests/_crossing-fixtures.nix` (`_testHashIdentity`, named so its status cannot be mistaken); nothing in `lib/` calls `hashString` at all, and `crossing-operations.test-no-crossing-source-mints-an-identity` scans for it with a live positive control.
+
 **Not exported**: `lib/module-convention.nix` (`setFunctionArgs`, `setDefaultModuleLocation`) is vendored byte-for-byte from nixpkgs and reachable only through `wrap`/`stripBindingArgs`/`wrapIdentity`.
 
 ## Entry points by task
@@ -117,6 +142,11 @@ Entry: `inputs.gen-bind.lib` (flake). Root `default.nix` is a FUNCTION `{ prelud
 | Add args visible to SIBLING modules at a crossing | `adaptArgs` (writes `_module.args`) |
 | Set `specialArgs` for a placed slice | `crossEval` (owns the nested `evalModules`) |
 | Conditionally contribute a slice's config | `configGate` |
+| Ask which target fixpoints a binding demands | `crossing.registerSupply`, then `crossing.demands projection name` |
+| Ask whether that answer is exact or carries residue | `crossing.deltaExact projection name` ⇒ `"EXACT"` / `"APPROX"` |
+| Build a body the substrate can analyse | `crossing.binding.termed` over `crossing.term.*` — never `wrapped`, whose demand set under-approximates |
+| Declare a contract that actually gets checked | `crossing.contractTerm.*` on an `ImportDecl`; `any` is unconstrained said visibly and costs no forcing |
+| Take a fragment across into a foreign eval | `ops = (crossing.mkOperations { hashIdentity = …; }).value`, then `ops.declare` → `ops.link` → `ops.close` with an `Adapter` |
 
 ## Measured traps
 
@@ -149,6 +179,15 @@ Each row verified in this run by evaluating against the flake `.lib` (`b`). Shar
 | `wrapIdentity` with `isAnon = true` emits **no** `key` | anon ⇒ `["_file","imports"]`; named ⇒ `["_file","imports","key"]`, `key` = `"nixos@host=igloo"`. Tests: `test-anon-uses-setDefaultModuleLocation`, `test-named-produces-key-and-file` |
 | A no-match wrap is a passthrough that still advertises the module's full arg set | `bindings = { zzz = 1; }` against `{ config, lib }` ⇒ `wrapped=false`, `validator=null`, `advertisedArgs=["config","lib"]`. A plain attrset module ⇒ `wrapped=false`, module returned unchanged. Tests: `test-function-passthrough-no-match`, `test-attrset-passthrough`, `test-validator-null-on-passthrough` |
 | `configGate`'s `adapt` reaches the NESTED eval as `_module.args`, not the outer one | gate true + `adapt = _: { injected = "ADAPTED"; }` ⇒ outer `config.echoed` = `"ADAPTED"`. Test: `test-configGate-adapt-threads-into-nested-eval` |
+| ★ `crossing.term.lit` FORCES its payload at construction — a field that throws is refused **even though nothing ever reads it**, because the walk forces what lazy evaluation would not | `t.lit { a = throw "boom"; }` ⇒ code `lit-payload-throws`, as a VALUE (`tryEval` succeeds on reading `.refusal.code`). This is a legitimate Nix value being refused. Tests: `crossing-term.test-lit-refuses-throwing-field`, `test-lit-cyclic-refusal-is-a-value-not-a-throw` |
+| ★ The `Lit` node budget is checked at EVERY node, **scalars included** — checking it only where the walk descends lets a FLAT payload drive the counter past zero without ever refusing | `t.lit (genList (i: i) 10005)` ⇒ `witness.axis = "nodes"`. Found by the suite: the first implementation checked the budget only at containers and this cell was the one that caught it. Tests: `crossing-term.test-lit-refuses-over-node-budget`, `test-lit-refuses-over-depth-budget` |
+| `crossing.term.lit` refuses EVERY derivation — that is, every package — by a type test at every node, and any self-referential attrset by the budget | `{ pkg = { type = "derivation"; }; }` ⇒ `lit-payload-derivation` (a root-only test would return false here); `let c = { self = c; }; in c` ⇒ `lit-payload-budget`. A body that must place a package is `wrapped`, not `termed` |
+| ★ `tryEval` does NOT catch an undefined-variable error | `(builtins.tryEval (let a = 1; in undefinedThing)).success` propagates the error rather than returning false. Consequence: the P-B arm showing a plain `import` fails on the free variable is **not expressible as a test cell**; the suite carries the live control that `tryEval` DOES catch a `throw` in the same run instead |
+| `builtins.scopedImport` works under pure flake evaluation, and the base scope stays reachable | `scopedImport { supplied = "x"; } ./file` resolves the free name AND still resolves `builtins` inside the file. Tests: `crossing-populations.test-scoped-body-reads-the-supplied-scope`, `test-scoped-body-still-reaches-the-base-scope` |
+| ★★ SUBSTRATE PLACEMENT REQUIRES `deltaExact = "EXACT"`, not just a passing congruence check | the congruence predicate is a NEGATIVE membership test and an APPROX set UNDER-APPROXIMATES, so the pass proves nothing. `placement` takes `deltaExact` and refuses `substrate-placement-inexact-demand` when it is APPROX. Consequence: a `wrapped`/`scoped` binding demanding a PEER no longer crosses at all — it crosses only when its demand IS the consuming target, which routes it to `wrapFn`. Tests: `crossing-adapter.test-approx-demand-refuses-substrate-placement` + its EXACT control, `crossing-operations.test-approx-peer-demanding-binding-refuses-at-placement` |
+| ★★ THE DEMAND ANALYSIS IGNORES ACCESS MARKS — a `Floor` mark narrows `crossings` and `E`, never the analysis | an analysis a gate is trusted for may not have its domain narrowed by an access mark. A Floor-marked `Termed(ReadFrom u)` still contributes `u`. The earlier cut was FAIL-OPEN: it reported an empty demand set and the congruence predicate then admitted a substrate placement the value cannot support. Tests: `crossing-delta.test-floor-mark-does-not-blind-the-analysis`, `test-floor-marked-chain-is-not-substrate-admissible`, `crossing-linkset.test-the-mark-narrows-the-query-never-the-analysis` |
+| A merged multi-body fragment refuses at `close` rather than dropping a body — `Body` is target-owned and only an Adapter produces or consumes one, so the substrate cannot combine two | `merge` two declared fragments, then `close` ⇒ code `close-body-count`. Test: `crossing-operations.test-close-refuses-a-multi-body-fragment` |
+| `crossings` is ordered by IDENTITY, and identity is a hash — never index it positionally | a cell asserting `[base, derived]` order failed; the nodes came back hash-ordered. Key by `.import` instead. Test: `crossing-operations.test-crossing-node-records-both-derived-facts` |
 
 ## Theory
 
@@ -165,6 +204,14 @@ Claimed in `README.md` §Theoretical Foundations, which splits its sources into 
 - **Reynolds (1972), *Definitional Interpreters*** — `builtins.functionArgs` as formal-parameter reflection. `lib/strip.nix` explicitly corrects the citation: residual arity is lambda calculus, "not a specific Reynolds 1972 section — §4 is Abstract Syntax".
 - **Leijen (2005), *Extensible Records with Scoped Labels*** — the merge-strategy vocabulary; gen-bind uses flat `//` rather than row-typed scoping (`lib/compose.nix`, `lib/merge-strategy.nix`).
 
+**Crossing surface** (`lib/crossing*.nix`), all now in the README table:
+
+- **Reynolds (1972)** — defunctionalization applied twice, to `ContractTerm` and to `BodyTerm`. Reynolds labels his own justification informal and states no completeness theorem; the vocabulary-covers-the-corpus claim is the design's, not his.
+- **Chitil (2012) §8** — the crossing takes the **completeness** arm of the Degen/Thiemann/Wehr disjunction, the opposite of `lib/contract.nix`'s lazy contracts. Lemma 4.1 is deliberately not offered as mitigation. `(>->)` is refused by name.
+- **Cardelli (1997)** — Definition 5-2 and Definition 5-7's precondition are imposed at `declare`/`merge`; `E(u)` takes the containment condition and **not** the `dom` operator; Theorem 7-6 is deliberately not cited.
+- **Jones, Gomard & Sestoft (1993) §12.2** — The Trick's finite-enum condition is ENFORCED as a precondition at `declare`, not inherited as a conclusion.
+- **Söderberg & Hedin (2013)** — the remote-reference reading only; the circular-NTA apparatus has no live case here. The undecidability result is **Boyland (2005)**, which their §7 cites rather than produces.
+
 **Cited in code but not in the README table**: Söderberg & Hedin (2013), CHORAG §5.1 — materialization-as-attribution over the static AST, the producer-scoped thunk resolution in `lib/thunk.nix`.
 
 **Checked invariants**: the library source imports no `nixpkgs.lib` — enforced by `ci/tests/purity.nix` (`test-library-source-is-nixpkgs-lib-free`) over `lib/**.nix` + root `flake.nix`, excluding `ci/`. The vendored `setFunctionArgs`/`setDefaultModuleLocation` are held byte-behavior-identical to nixpkgs' module probe by `ci/tests/evalmodules-equivalence.nix`.
@@ -178,8 +225,16 @@ nix eval --json .#lib --apply 'l: { top = builtins.attrNames l; nested = builtin
 Current output (verbatim):
 
 ```json
-{"nested":{"contract":["apply","hasFields","isType","mk","nonEmpty"],"mergeStrategy":["bindWins","error","fromBindings","systemWins"],"provenance":["format"]},"top":["adaptArgs","buildSignature","compose","composeWith","configGate","contract","crossEval","isThunk","mergeStrategy","mkMergeValidator","mkThunk","mkThunkFrom","provenance","resolveThunks","stripBindingArgs","wrap","wrapAll","wrapIdentity"]}
+{"nested":{"contract":["apply","hasFields","isType","mk","nonEmpty"],"mergeStrategy":["bindWins","error","fromBindings","systemWins"],"provenance":["format"]},"top":["adaptArgs","buildSignature","compose","composeWith","configGate","contract","crossEval","crossing","isThunk","mergeStrategy","mkMergeValidator","mkThunk","mkThunkFrom","provenance","resolveThunks","stripBindingArgs","wrap","wrapAll","wrapIdentity"]}
 ```
+
+Crossing sub-surface (same command with `--apply 'l: builtins.attrNames l.crossing'`), verbatim:
+
+```json
+["binding","channel","checkContract","checkInert","checkTerm","codes","coherence","contractFormers","contractPreds","contractTerm","deltaExact","demands","environment","exact","exportDeclFields","importDeclFields","inertBudget","interpret","isExact","isOk","isRefusal","knownFormers","linked","mark","mergePolicyNames","mintIdentity","mkAdapter","mkLinkset","mkOperations","obtainable","party","placement","prims","readCtxHeads","registerSupply","relationLabels","resolveTerm","selectTerm","strata","substrateValue","term","time"]
+```
+
+★ **The six operation names and `referenceHashIdentity` are DELIBERATELY ABSENT from that list** — they were on it in the first cut. `declare`/`merge`/`gate`/`link`/`close`/`residue` now come only from `mkOperations`, and the stand-in formula moved to the test fixtures. A drift check that finds any of the seven back on this surface has found a regression, not an addition.
 
 **Checks.** Test-runner invocation (from the repo root; CI runs the same command with `working-directory: ci`, `.github/workflows/ci.yml:13,18`):
 

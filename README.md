@@ -27,6 +27,7 @@ gen-bind is a **nixpkgs-lib-free Class B** library: its only dependency is [gen-
   - [Arg Stripping](#arg-stripping)
   - [Batch Wrapping](#batch-wrapping)
   - [Terminal-Crossing Arg-Environment](#terminal-crossing-arg-environment)
+  - [The Boundary Crossing](#the-boundary-crossing)
 - [API Reference](#api-reference)
 - [Laziness Guarantees](#laziness-guarantees)
 - [Architecture](#architecture)
@@ -416,6 +417,70 @@ gated = genBind.configGate {
 
 **Charter (ratified).** gen-bind's charter is now **binding injection + terminal-crossing arg-environment**. `lib/arg-env.nix` is the **sole, deliberately-ratified module-*evaluating* file** — it drives a nested `evalModules` at the reach/delivery boundary; every other `lib/` file remains module-*producing* under the full purity ban. Two invariants keep this bounded: **(P1) no nixpkgs dependency** — global and unconditional, gen-bind imports no `nixpkgs.lib` (the `lib` is always runtime-threaded, never a file parameter); **(P2) never operates the module system** — relaxed for `arg-env.nix` *by design*, and for no other file. The `purity` suite whitelists exactly the two tokens `arg-env.nix` uses (`lib.`, `evalModules`) and keeps `{ lib }`/`{ lib,`/`mkOption`/`nixpkgs` banned even there, so the exemption is a documented, single-file decision — **not a precedent for module-system creep**.
 
+### The Boundary Crossing
+
+`genBind.crossing` is the **boundary crossing** surface: the mechanism by which a substrate-resolved value enters an evaluation gen does not own. The boundary is the **eval**, not the repo — a sibling library at a different pin is a foreign eval under the same rule — and what the surface separates is *re-handing* a value from *constructing* one.
+
+**A crossing is a NODE, not an edge.** It is the reified relation between an import declaration, a **binding**, and a consuming target. A relation that must carry content cannot be an edge, and a crossing carries content: its congruence verdict, its residue bit, its refusal witness. The middle relatum is the **binding**, never the supply — the demand set is a property of a *body*, a body is a field of a `Binding`, so one supply is an emitter of many crossings rather than a relatum of one. Making the supply the relatum would put the over-approximation back at the node, demoting every plain binding whose sibling happens to carry a producer.
+
+**The demand relation is DERIVED, not declared.** `ReadFrom` is the one former that names a unit, and the demand set is computed by structural recursion over a closed, first-order body-term algebra:
+
+```nix
+b = genBind.crossing;
+
+supply = {
+  bindings = {
+    base    = b.binding.plain  { value = { host = "igloo"; }; mark = b.mark.open; };
+    derived = b.binding.termed { term = b.term.readCtx "base" [ "host" ]; mark = b.mark.open; };
+    peer    = b.binding.termed { term = b.term.readFrom "iceberg" [ "networking" "hostName" ]; mark = b.mark.open; };
+    opaque  = b.binding.wrapped { producer = "iceberg"; body = scope: scope.x; mark = b.mark.open; };
+  };
+  proposals = { };
+  origins = { };
+};
+
+reg = b.registerSupply supply;   # stratifies, refuses a sibling cycle, mints the projection
+reg.value.heights                # { base = 0; derived = 1; opaque = 0; peer = 0; }
+reg.value.projection.peer        # { targets = [ "iceberg" ]; exact = "EXACT"; }
+reg.value.projection.opaque      # { targets = [ "iceberg" ]; exact = "APPROX"; }
+```
+
+**`deltaExact` is why the recursion returns a pair and not a bare set.** A `Scoped` or `Wrapped` binding's own demand set under-approximates, and a `Termed` binding reading one **inherits that residue**. An approximating chain and an exact chain of the same shape return *identical, indistinguishable* sets, so nothing computed over the set alone can decide whether a binding is in the derived class. The exactness bit is a conjunction accumulated by the same traversal — no second walk — and it sees through `If`, so a residue-carrying arm marks the whole term `APPROX`. That is the conservative direction.
+
+**The four binding constructors ARE the three populations**, so a binding's population is decidable from its tag and no reader classifies anything:
+
+| Constructor | Population | Demand set |
+|---|---|---|
+| `plain { value; mark; }` | — | carries none; still traversed by the queries, so it carries the floor mark |
+| `termed { term; mark; }` | P-A, the substrate-assembled body | **computed** from the term, total and decidable |
+| `scoped { file; scope; producer; mark; }` | P-B, the file-loaded body | `{producer}`, complete on the caller-lexical channel only — the `import` channel is measured open |
+| `wrapped { producer; body; mark; }` | P-C, the foreign lambda | `{producer}`, an **under-approximation**: application bounds the argument channel and nothing lexical |
+
+`Termed` is **not** a restriction on the authoring language. An author builds the term with ordinary Nix — `map`, `listToAttrs`, computed attribute names — and all of that runs at term-construction time, leaving a term whose keys and read paths are literal by the time the analysis runs.
+
+**The stratification is derived too.** A binding's height in the sibling-reference graph is read off the `ReadCtx` head names in the terms — a canonical *height function*, not a choice of topological order, so it is unique and invariant under the presentation order of the bindings. A `ReadCtx` resolves only against a **strictly lower** stratum, so a same-pass sibling reference cannot be named and a cycle in that channel is refused at registration and inexpressible thereafter. A **cycle across eval boundaries is a different object** and stays expressible and unattributed: the host evaluator's `infinite recursion`, uncatchable and carrying no name of ours.
+
+**Placement is derived in two steps at two operations**, because its two inputs become available at different ones. `link` evaluates the congruence predicate — *does this binding demand this very target?* — over the materialized projection, forcing nothing, and records it on the node beside the residue bit. `close` resolves `(Channel, Time)` against the Adapter's offered positions. It **must not** silently downgrade a substrate-placed name to target-invoked: that is a congruence violation, not a degradation.
+
+**Substrate placement requires an EXACT demand set, not merely a passing congruence check.** The predicate is a *negative* membership test — *is this target absent from the demand set?* — and an APPROX set under-approximates, so the true set may be larger and may contain the very target. A pass over an APPROX set therefore proves nothing, and admitting it would substitute a value before the fixpoint that determines it has run. `placement` takes both facts and refuses `substrate-placement-inexact-demand` when the second is missing. The two stay distinct on the crossing node, because collapsing *proved safe* into *could not prove* loses the witness. The visible consequence: a `scoped` or `wrapped` binding whose producer is a **peer** does not cross, since its demand set can never be exact; it crosses when its demand is the consuming target, which routes it to the target-invoked channel where the residue costs nothing.
+
+**Access marks bound the queries, never the analysis.** A `Floor` mark terminates `crossings` and `E` at the node — those are queries, which is to say access — while the demand analysis walks straight through it. An analysis is the input a gate is trusted for, and a gate whose domain is narrower than the property it is trusted for is exactly the narrowing that makes a clean result meaningless: a Floor-marked binding demanding the consuming target would report an empty demand set, and the congruence predicate would then admit a placement the value cannot support. The price of the split is stated rather than absorbed, with the direction word stated correctly: a Floor-marked binding's cross-unit references do not enter `E(u)`, so `linked(u)` can be wrongly **true** and the coherence refusal goes blind. **On the decisions `E` feeds, that narrowing is permissive, not fail-closed** — calling it fail-closed describes the declaration rather than its effect, and the two point opposite ways. It is bounded twice. First, **the mark is not transitive**: it stops the query at the node carrying it and nowhere else, so an unmarked reader of a Floor-marked sibling puts the demanded target straight back into `E(u)`, which is the conservative direction to leak in. Second, **`close` still refuses the unit**: the placement decision reads the analysis, which is mark-blind, so the binding is still substrate-placed and still refuses `value-not-obtainable`. A unit that is linked-wrongly-true therefore cannot silently cross carrying an unresolvable reference; it fails one operation later, with a witness.
+
+**Contracts are DATA, checked substrate-side, eagerly and completely.** The vocabulary is a closed first-order algebra carried as tagged terms and interpreted beneath it, so a contract is comparable, hashable and enumerable where a closure is none of those. The check runs *before* the value crosses and it **forces** — the only construction under which the payload contains no reachable function is one where the check has already run and the payload is the checked value. The price is stated rather than absorbed: a contract system is meaning-preserving **or** complete, not both, and this takes completeness, so a violation in a part the target would never have demanded is still reported and a fleet that succeeds today by never forcing a bad part fails under it. It is **opt-in per name** — `Any` is unconstrained said visibly and costs no forcing — so the price is paid where a contract was asked for and nowhere else. Higher-order contracts are **inadmissible**: their two contracts fire on *application*, inside the consuming target, which needs exactly the substrate closure at the installation site that the construction exists to remove.
+
+**The operations exist only once you inject the mint.** The published surface carries the constructors and `mkOperations`; it ships **no minting formula, not even as a convenience default**, because ADR-0016 gives the substrate one minting authority and a shipped fallback would be a second one — reachable by any consumer who simply omitted the injection, with the omission invisible at the call site. `hashIdentity` is a total field: omitting it refuses by name rather than silently defaulting.
+
+```nix
+ops    = (b.mkOperations { hashIdentity = yourSubstrateMint; }).value;
+frag   = ops.declare { imports = { … }; exports = { }; } body;
+linked = ops.link "igloo" reg.value.projection supply frag.value;
+unit   = ops.close "igloo" reg.value.projection { members = [ "igloo" "iceberg" ]; } adapter linked.value;
+```
+
+**Every failure is a tagged VALUE, never a throw** — `tryEval` cannot catch every failure form, so a thrown refusal is not reliably recoverable. Each refusal carries a `code`, the `blamed` party and a `witness`; `b.isOk` / `b.isRefusal` discriminate, and `b.codes` enumerates the vocabulary.
+
+**Two carriers the surface deliberately does not invent.** The Adapter's opaque types — `Body`, `TargetUnit`, `TargetArgs`, `ProducerScope` — are target-owned and are produced or consumed only by an Adapter; `close` returns the TargetUnit exactly as the adapter built it and never reads its structure. Consequently the substrate cannot combine two `Body` values, so a merged multi-body fragment refuses at `close` rather than having one of its bodies silently dropped; and where a value would need a foreign scope the substrate does not hold — a `ProducerScope` for a `Wrapped` body, a target config root for a `ReadFrom` — `close` refuses by name with the missing carrier in the witness, rather than skipping the check and letting silence read as success.
+
 ## API Reference
 
 ### `wrap`
@@ -668,6 +733,19 @@ Terminal-crossing arg-environment (reach/delivery edges, at the evalModules boun
       adaptArgs — inject `_module.args = adapt args` alongside a placed slice
       crossEval — nested evalModules in the terminal's `lib` (specialArgs / freeform absorber)
       configGate — mkIf-gate a slice's nested-eval'd config (cf. Cardelli 1997 §5 linkset)
+
+The boundary crossing (a substrate value entering an eval gen does not own)
+registerSupply — stratify the sibling graph, refuse a cycle, mint the projection
+  |-- strata — the canonical HEIGHT function over the ReadCtx head names
+  '-- the structural recursion — (targets, exact) per binding, memoised in stratum order
+declare -> merge / gate -> link -> close
+  |-- declare — signature totality, closed vocabularies, satisfiedBy edges, token
+  |-- merge   — export disjointness, import compatibility by structural equality
+  |-- gate    — Jones's finite-enum precondition ENFORCED; branches materialized (cf. Jones 1993 §12.2)
+  |-- link    — mints one crossing per name-and-binding pair; records the congruence
+  |             verdict and deltaExact on the node
+  '-- close   — placement against the Adapter, coherence over the Linkset, the
+                substrate-side contract check, then the adapter's TargetUnit
 ```
 
 ### File Layout
@@ -686,22 +764,43 @@ lib/
   signature.nix         — module signature inference
   arg-env.nix           — terminal-crossing arg-environment transforms (adaptArgs, crossEval, configGate)
   module-convention.nix — vendored nixpkgs convention helpers (setFunctionArgs, setDefaultModuleLocation)
+  crossing.nix          — the crossing node, its identity, and declare/merge/gate/link/close/residue
+  crossing-refusal.nix  — the Either carrier: refusal as a tagged value, the code and blame vocabularies
+  crossing-term.nix     — the BodyTerm algebra, the InertValue minting walk, the primitive table, resolution
+  crossing-binding.nix  — the four Binding constructors and the boundary mark
+  crossing-delta.nix    — the derived stratification, the demand recursion, the projection, deltaExact
+  crossing-contract.nix — first-order ContractTerm and its eager, complete interpreter
+  crossing-adapter.nix  — the Adapter record and the placement table
+  crossing-linkset.nix  — the fleet linkset, the cross-unit environment, coherence
 ```
+
+The crossing files are **flat in `lib/`** deliberately: the `purity` suite scans `builtins.readDir lib`
+and filters on the `.nix` suffix, so a subdirectory would be silently exempt from the nixpkgs-lib-free
+invariant. A gate that skips a file is worse than no gate, because it reads as a pass.
 
 ## Testing
 
-**87 tests across 13 suites** — `arg-env`, `compose`, `contract`, `evalmodules-equivalence`,
-`identity`, `integration`, `merge-strategy`, `provenance`, `purity`, `signature`, `strip`,
-`thunk`, `wrap`. Tests use nix-unit in `ci/` (which keeps a `nixpkgs` dependency for the
-test runner and the real `lib.evalModules` driven by the production-safety equivalence
-gate and the `arg-env` crossing suite):
+**305 tests across 20 suites** — `arg-env`, `compose`, `contract`, `crossing-adapter`,
+`crossing-contract`, `crossing-delta`, `crossing-linkset`, `crossing-operations`,
+`crossing-populations`, `crossing-term`, `evalmodules-equivalence`, `identity`, `integration`,
+`merge-strategy`, `provenance`, `purity`, `signature`, `strip`, `thunk`, `wrap`. Tests use nix-unit
+in `ci/` (which keeps a `nixpkgs` dependency for the test runner and the real `lib.evalModules`
+driven by the production-safety equivalence gate and the `arg-env` crossing suite):
 
 ```bash
 cd ci
-nix run nixpkgs#nix-unit -- --flake .#tests            # all 87, across 13 suites
+nix run nixpkgs#nix-unit -- --flake .#tests            # all 305, across 20 suites
 nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
 nix flake check                                        # full check incl. treefmt
 ```
+
+Every refusal row of the crossing surface is armed by a planted violation **and** its conforming
+control in the same suite, cells named `test-control-*`: a row whose conforming input is untested has
+not been armed, and a walk that refuses everything is indistinguishable from one that works. Where an
+oracle cannot be expressed as a cell the reason is measured rather than asserted — the P-B
+file-import arm needs an undefined-variable error, which `tryEval` does **not** convert, so the suite
+carries the live control for that claim (`tryEval` catching a `throw` in the same run) instead of a
+silently absent arm.
 
 The `purity` suite enforces the nixpkgs-lib-free Class B boundary — the library source
 imports no `nixpkgs.lib` — and the `evalmodules-equivalence` suite drives gen-bind output
@@ -710,7 +809,7 @@ byte-behavior-identical.
 
 ## Theoretical Foundations
 
-gen-bind's design draws on five papers. Each is either **implemented** (the paper's formalism directly shapes the code) or **informed by** (the paper's concepts influenced the approach without direct implementation).
+gen-bind's design draws on seven papers. Each is either **implemented** (the paper's formalism directly shapes the code) or **informed by** (the paper's concepts influenced the approach without direct implementation).
 
 ### Implements
 
@@ -719,6 +818,10 @@ gen-bind's design draws on five papers. Each is either **implemented** (the pape
 | Blame tracking | Findler & Felleisen -- [*Contracts for Higher-Order Functions*](https://www2.ccs.neu.edu/racket/pubs/icfp2002-ff.pdf) (ICFP 2002) | Provenance metadata plays the role of Findler's blame labels: when a contract fires or a collision is detected, the error message identifies the guilty party (binding source, scope rule) via the same covariant/contravariant blame assignment structure (cf. Findler 2002 S2.3). |
 | Lazy contracts | Chitil -- [*Practical Typed Lazy Contracts*](https://kar.kent.ac.uk/30790/1/contacts.pdf) (ICFP 2012) | Contracts are partial identities (`assert c` is less than or equal to `id` -- Chitil 2012 S4.2) that fire on demand. gen-bind contracts wrap binding values in exactly this pattern: the assertion thunk is never forced unless the consuming module demands the arg (cf. Chitil 2012 S2). |
 | Module signatures | Cardelli -- [*Program Fragments, Linking, and Modularization*](http://lucacardelli.name/Papers/Linking.A4.pdf) (POPL 1997) | gen-bind's `signature.requires` and `signature.bound` are a lightweight analog of Cardelli's linkset interfaces: each compilation unit (wrapped module) declares what it provides (bound args) and what it still needs (requires from evalModules). Identity wrapping implements Cardelli's fragment naming for dedup (cf. Cardelli 1997 S5). |
+| Crossing fleet linkset | Cardelli -- *Program Fragments, Linking, and Modularization* (POPL 1997) | `crossing.mkLinkset`/`coherence` impose Cardelli's two disjointness clauses directly: `imp(L)` intersect `exp(L)` is empty (Definition 5-2) at `declare`, and `exp(L)` intersect `exp(L')` is empty (Definition 5-7's precondition) at `merge`. What transfers to `E(u)` is the **containment condition**, not the `dom` operator -- Cardelli's environment is one of `x:A` bindings and `E(u)` is a set of target identities, so the operator would be a borrowed notation on an object where it has no meaning. Theorem 7-6 is deliberately **not** cited as a licence: its hypotheses are F1 typing derivations this setting cannot supply. |
+| Defunctionalized contracts and bodies | Reynolds -- [*Definitional Interpreters for Higher-Order Programming Languages*](https://dl.acm.org/doi/10.1145/800194.805852) (1972) | `ContractTerm` and `BodyTerm` are Reynolds' transformation applied twice: a set of functions becomes a set of records interpreted by an `apply`-style function beneath the algebra. That is what makes a contract comparable, hashable and enumerable, and what makes a body's demand set analysable at all. Reynolds labels his own justification informal and states **no completeness theorem**, so the claim that a closed former vocabulary covers the authored corpus is gen-bind's argument and not his. |
+| Eager complete contracts | Chitil -- *Practical Typed Lazy Contracts* (ICFP 2012) S8 | The crossing surface deliberately takes the **opposite** arm of the result Chitil reports from Degen, Thiemann and Wehr: a contract system is meaning-preserving **or** complete, not both. Crossing contracts are checked substrate-side and eagerly, so a violation is reported even in a part the target would never have demanded. Chitil's Lemma 4.1 (`assert c` is less than or equal to `id`) is **not** offered as mitigation -- it is stated over an order whose least element represents both non-termination and a violated contract, so it admits that loss rather than excluding it. The paper's function combinator `(>->)` is refused by name, because its contracts fire on application inside the consumer. |
+| Gate finite-enum precondition | Jones, Gomard & Sestoft -- *Partial Evaluation and Automatic Program Generation* (1993) S12.2 | "The Trick" applies when a dynamic variable is known to assume one of a finite set of statically computable values. gen-bind treats that as a **precondition to enforce**, not a conclusion to inherit: a gate whose `enum` is not finite and determined before any target fixpoint is refused at `declare`. With it enforced every branch is materialized, so the declared edge set is the union over branches unconditionally and no conditional edge is written. |
 
 ### Informed by
 
@@ -726,3 +829,4 @@ gen-bind's design draws on five papers. Each is either **implemented** (the pape
 |---------|-------|-------------|
 | Closure-based binding | Reynolds -- [*Definitional Interpreters for Higher-Order Programming Languages*](https://dl.acm.org/doi/10.1145/800194.805852) (1972) | Reynolds' closure environments inform the approach but gen-bind's wrapping is partial application, not defunctionalization per se. `builtins.functionArgs` is the Nix analogue of formal parameter reflection in a definitional interpreter (cf. Reynolds 1972 S4). |
 | Merge resolution | Leijen -- [*Extensible Records with Scoped Labels*](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/scopedlabels.pdf) (TFP 2005) | Leijen's free extension (retaining duplicate labels with scoped resolution) informs the merge strategy vocabulary: `bindWins` shadows like Leijen's first-match selection; `error` mirrors strict extension where duplicates are rejected (cf. Leijen 2005 S2). gen-bind uses flat `//` rather than row-typed scoping. |
+| Remote attribute reference | Soderberg & Hedin -- *Circular Higher-Order Reference Attribute Grammars* (2013) S5.1, S7 | Supplies the **remote reference** reading that `lib/thunk.nix` already uses -- a deferred value is an attribute whose value refers to a node in another unit's context. Its circular-NTA well-definedness apparatus has **no live case** in the crossing: a substrate-internal deferred cycle is inexpressible rather than detected, so there is no cycle to accept and no fixpoint-from-bottom iteration to bound. The undecidability of static circularity detection under remote attribute access is **Boyland's** result (*Remote attribute grammars*, J. ACM 52(4), 2005), which Soderberg & Hedin S7 cites rather than produces; the attribution belongs to Boyland. |
