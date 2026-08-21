@@ -4,9 +4,11 @@
 # FORMAL parameters. But a reach/delivery edge that crosses a module-system boundary must
 # also rewrite the ARG ENVIRONMENT the placed slice resolves against AT the `evalModules`
 # boundary (`_module.args` / `specialArgs`), and may gate the slice's resolved CONFIG on an
-# eval-time predicate. Content rewriters (gen-edge `adapt`: content → Π → content, applied
-# in the pre-eval fold) structurally cannot reach that boundary — they never see
-# `_module.args`/`specialArgs`. These three primitives do.
+# eval-time predicate. Content rewriters (content → content, applied in the pre-eval fold —
+# gen-view's `transform.map`, and gen-edge's `adapt` before ADR-0010 §3 retired that library)
+# structurally cannot reach that boundary — they never see `_module.args`/`specialArgs`. The
+# claim is about the SHAPE of a content-to-content rewriter and holds under any host for it.
+# These three primitives do reach it.
 #
 # Academic: Cardelli 1997 (Program Fragments, Linking, Modularization) §5. The arg
 # environment is the LINKSET a fragment (module) resolves its free names against; adaptArgs

@@ -382,7 +382,7 @@ batch = genBind.wrapAll {
 
 ### Terminal-Crossing Arg-Environment
 
-`wrap`/`mkThunk` rewrite a module's FORMAL parameters *before* `evalModules`. But a reach/delivery edge that crosses a module-system boundary must rewrite the **arg environment** the placed slice resolves against **at** the `evalModules` boundary (`_module.args` / `specialArgs`), and may **gate** the slice's resolved config on an eval-time predicate. Content rewriters (gen-edge's `adapt`: content → Π → content, run in the pre-eval fold) structurally cannot reach that boundary — they never see `_module.args`/`specialArgs`. Three primitives do:
+`wrap`/`mkThunk` rewrite a module's FORMAL parameters *before* `evalModules`. But a reach/delivery edge that crosses a module-system boundary must rewrite the **arg environment** the placed slice resolves against **at** the `evalModules` boundary (`_module.args` / `specialArgs`), and may **gate** the slice's resolved config on an eval-time predicate. Content rewriters (content → content, run in the pre-eval fold — gen-view's `transform.map`, and gen-edge's `adapt` before ADR-0010 §3 retired that library) structurally cannot reach that boundary — they never see `_module.args`/`specialArgs`. That is a fact about the shape of a content-to-content rewriter, so it survives the rehoming. Three primitives do reach it:
 
 ```nix
 # adaptArgs — inject `_module.args = adapt args` alongside a placed slice (the in-module

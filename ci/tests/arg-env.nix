@@ -1,7 +1,8 @@
 # arg-env — terminal-crossing arg-environment transforms.
 #
-# adaptArgs / crossEval / configGate cross the `evalModules` boundary that the content
-# rewriters (gen-edge `adapt`) cannot reach: they rewrite the ARG ENVIRONMENT
+# adaptArgs / crossEval / configGate cross the `evalModules` boundary that content
+# rewriters (gen-view's `transform.map`; gen-edge's `adapt` before ADR-0010 §3 retired that
+# library) cannot reach: they rewrite the ARG ENVIRONMENT
 # (`_module.args` / `specialArgs`) a placed module slice resolves against, and gate a
 # slice's nested-eval'd CONFIG via `mkIf`. `lib` is the REAL nixpkgs lib supplied by the
 # test harness — the same shape a terminal threads in as `args.lib` at the crossing.
