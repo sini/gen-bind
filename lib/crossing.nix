@@ -40,6 +40,16 @@ let
   adapterLib = import ./crossing-adapter.nix { inherit prelude; };
   linksetLib = import ./crossing-linkset.nix { inherit prelude; };
 
+  # The concrete adapters — ADR-0031 F2's destination for gen-flake's
+  # `inject.nix` and `terminals.nix`. `crossing-adapter.nix` defines the Adapter
+  # type and resolves placement; that file defines the instances. The contract
+  # interpreter is threaded in because it is SUBSTRATE-side and target-agnostic:
+  # an adapter chooses its Body, never its own contract semantics.
+  adapterSetLib = import ./crossing-adapter-set.nix {
+    inherit prelude;
+    inherit (contractLib) interpret;
+  };
+
   inherit (refusalLib)
     ok
     refuse
@@ -959,6 +969,11 @@ in
     placement
     channel
     time
+    ;
+  inherit (adapterSetLib)
+    injectAdapter
+    mkSystemTerminal
+    mkFlakeTerminal
     ;
   inherit (linksetLib)
     mkLinkset
