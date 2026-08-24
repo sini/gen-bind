@@ -116,6 +116,9 @@ The mechanism by which a substrate-resolved value enters an eval gen does not ow
 | ↳ `close` | `TargetId -> DeltaProjection -> Linkset -> Adapter -> Fragment -> Result TargetUnit` |
 | ↳ `residue` | `Fragment -> Signature` |
 | `crossing.mkAdapter` / `.placement` | adapter totality check / the `(Channel, Time)` table, which takes `staticityAdmissible` **and** `deltaExact` |
+| ★ `crossing.injectAdapter` | the ARG-ENVIRONMENT WRITER: `bindFormals` produces `{ imports = [ body ]; _module.args = values; }`, so the name reaches every module in the target's eval — *including ones the substrate never saw*. Its payload carries option-type objects, i.e. functions, so the site runs a **declared opt-out with its price recorded**, not the by-construction form |
+| ★ `crossing.mkSystemTerminal` | `{ evaluator, locateConfig } -> { adapter = carriage -> Adapter; locateConfig; }`. `bindFormals` is `wrapAll`'s partial application over a module-list `Body` and returns `.modules`, **not** `.all` — the collision validators throw *inside the target*, which this surface cannot express, so the append is a declared CAPABILITY residue. `nodes`/`extraModules`/`osConfig`/`evaluator` ride the closure, invisible to δ and to `E(u)` |
+| ★ `crossing.mkFlakeTerminal` | `{ evalFlakeModule, inputs, self, systems ? [] } -> { adapter; locateConfig = null; }`. A NULL-POSITION adapter: all three placement positions `null`, so any crossing over it is refused by name with the offered positions in the witness. **Growing an offered position is a design change requiring its own ruling** — it converts a by-construction guarantee into an as-authored one with every fixture still green |
 | `crossing.mkLinkset` / `.environment` / `.linked` / `.coherence` | the fleet, `E(u)`, the alone-shipping predicate, the containment refusal |
 | `crossing.contractTerm.*` / `.interpret` / `.checkContract` | `any` `never` `prop` `attrs` `list` `and` `orElse`; the eager, complete interpreter; the vocabulary gate |
 | `crossing.isOk` / `.isRefusal` / `.codes` / `.party` | the Either discriminators and the refusal vocabularies |
@@ -231,7 +234,7 @@ Current output (verbatim):
 Crossing sub-surface (same command with `--apply 'l: builtins.attrNames l.crossing'`), verbatim:
 
 ```json
-["binding","channel","checkContract","checkInert","checkTerm","codes","coherence","contractFormers","contractPreds","contractTerm","deltaExact","demands","environment","exact","exportDeclFields","importDeclFields","inertBudget","interpret","isExact","isOk","isRefusal","knownFormers","linked","mark","mergePolicyNames","mintIdentity","mkAdapter","mkLinkset","mkOperations","obtainable","party","placement","prims","readCtxHeads","registerSupply","relationLabels","resolveTerm","selectTerm","strata","substrateValue","term","time"]
+["binding","channel","checkContract","checkInert","checkTerm","codes","coherence","contractFormers","contractPreds","contractTerm","deltaExact","demands","environment","exact","exportDeclFields","importDeclFields","inertBudget","injectAdapter","interpret","isExact","isOk","isRefusal","knownFormers","linked","mark","mergePolicyNames","mintIdentity","mkAdapter","mkFlakeTerminal","mkLinkset","mkOperations","mkSystemTerminal","obtainable","party","placement","prims","readCtxHeads","registerSupply","relationLabels","resolveTerm","selectTerm","strata","substrateValue","term","time"]
 ```
 
 ★ **The six operation names and `referenceHashIdentity` are DELIBERATELY ABSENT from that list** — they were on it in the first cut. `declare`/`merge`/`gate`/`link`/`close`/`residue` now come only from `mkOperations`, and the stand-in formula moved to the test fixtures. A drift check that finds any of the seven back on this surface has found a regression, not an addition.

@@ -28,6 +28,7 @@ gen-bind is a **nixpkgs-lib-free Class B** library: its only dependency is [gen-
   - [Batch Wrapping](#batch-wrapping)
   - [Terminal-Crossing Arg-Environment](#terminal-crossing-arg-environment)
   - [The Boundary Crossing](#the-boundary-crossing)
+  - [The Adapter set](#the-adapter-set)
 - [API Reference](#api-reference)
 - [Laziness Guarantees](#laziness-guarantees)
 - [Architecture](#architecture)
@@ -481,6 +482,27 @@ unit   = ops.close "igloo" reg.value.projection { members = [ "igloo" "iceberg" 
 
 **Two carriers the surface deliberately does not invent.** The Adapter's opaque types — `Body`, `TargetUnit`, `TargetArgs`, `ProducerScope` — are target-owned and are produced or consumed only by an Adapter; `close` returns the TargetUnit exactly as the adapter built it and never reads its structure. Consequently the substrate cannot combine two `Body` values, so a merged multi-body fragment refuses at `close` rather than having one of its bodies silently dropped; and where a value would need a foreign scope the substrate does not hold — a `ProducerScope` for a `Wrapped` body, a target config root for a `ReadFrom` — `close` refuses by name with the missing carrier in the witness, rather than skipping the check and letting silence read as success.
 
+### The Adapter set
+
+`crossing-adapter.nix` defines the Adapter *type* and resolves placement; `crossing-adapter-set.nix` defines the *instances* — the concrete adapters the substrate ships. Each says what a `Body` is for its own target, which is the whole content of the type's opacity.
+
+```nix
+b.crossing.injectAdapter                                    # -> Adapter
+b.crossing.mkSystemTerminal { evaluator, locateConfig }      # -> { adapter = carriage -> Adapter; locateConfig; }
+b.crossing.mkFlakeTerminal { evalFlakeModule, inputs, self, systems ? [] }
+                                                            # -> { adapter = Adapter; locateConfig = null; }
+```
+
+**`injectAdapter` realizes `Formals` as an ARG-ENVIRONMENT WRITER, and the choice is behavioural rather than stylistic.** Its `Body` is a module destined to be spliced into an evaluation the substrate does not own, and its `bindFormals` produces `{ imports = [ body ]; _module.args = values; }`. An arg environment reaches every module in the target's evaluation, *including modules the substrate never saw*; a formal partial-application reaches only the wrapped set, and that narrowing is invisible to any consumer whose readers happen to sit inside it. Both constructions are admissible at the same coordinate — `Channel` and `Time` are placement coordinates of the substrate's vocabulary, not names of module-system channels — so the surface states which one it takes and arms the difference with a cell.
+
+★ **The payload this adapter places is NOT plain data, and that is a DECLARED opt-out with its price recorded.** A resolved gen fixpoint carries option-type objects, whose `check`/`merge` fields are functions, so the payload-side *provably-plain-data* predicate fails on it. The value is inert only because `_module.args` is not type-walked by the consuming module system — a consequence-based argument, which is the documented-hole form the by-construction target exists to replace. The declaration is carried at the construction site, and a consumer that routes any part of the payload into an options tree as a `type` leaves the condition under which it is safe.
+
+**`mkSystemTerminal` realizes `Formals` as `wrapAll`'s partial application**, its `Body` being the class module list. Two things ride the closure rather than crossing as bindings, and they are named because δ cannot see them and `E(u)` cannot count them: `extraModules`, `evaluator` and `osConfig` are *scope* residues with no reach of their own; **`nodes` is a correctness residue and it is silent** — a missed edge to a peer leaves the value correct and makes `E(u)` under-report, which can render `linked(u)` wrongly true. Separately, the successor returns `wrapAll`'s `.modules` and **not** `.all`: the appended merge-collision validators raise a `throw` inside the target's own evaluation, which this surface cannot express at all, since a refusal here is a tagged value. That is a **capability** residue, declared rather than discovered.
+
+**`mkFlakeTerminal` is a NULL-POSITION adapter** — `bindFormals`, `bindArgEnv` and `wrapFn` are all `null`, which `mkAdapter` accepts, since only `wrapUnit` and `interpret` are mandatory. A collect-only flake fleet still builds; a crossing over it is **refused by name**, with the offered positions in the witness and the adapter selector blamed. This converts a silence into a witness: previously such a fleet could not receive a crossing because the function signature had nowhere to put one. **Growing an offered position onto it is a design change requiring its own ruling**, never an implementation detail — it would turn a by-construction guarantee into an as-authored one with every fixture still green.
+
+**The evaluated-config locator is a per-terminal field, never a fixed `.config` path.** For a `nixosSystem`-shaped evaluator the config sits at `.config` *of* the artifact; for an `evalModules`-shaped data terminal the artifact *is* the config, and a fixed path silently misreads the second by reaching for `.config` of something that already is one. `locateConfig = null` says "this terminal produces no evaluated config" visibly, the same way a `null` Adapter position says one is not offered.
+
 ## API Reference
 
 ### `wrap`
@@ -771,6 +793,8 @@ lib/
   crossing-delta.nix    — the derived stratification, the demand recursion, the projection, deltaExact
   crossing-contract.nix — first-order ContractTerm and its eager, complete interpreter
   crossing-adapter.nix  — the Adapter record and the placement table
+  crossing-adapter-set.nix — the concrete adapters: the arg-environment writer, the system
+                             terminal, the null-position flake terminal
   crossing-linkset.nix  — the fleet linkset, the cross-unit environment, coherence
 ```
 
@@ -780,16 +804,17 @@ invariant. A gate that skips a file is worse than no gate, because it reads as a
 
 ## Testing
 
-**305 tests across 20 suites** — `arg-env`, `compose`, `contract`, `crossing-adapter`,
-`crossing-contract`, `crossing-delta`, `crossing-linkset`, `crossing-operations`,
-`crossing-populations`, `crossing-term`, `evalmodules-equivalence`, `identity`, `integration`,
-`merge-strategy`, `provenance`, `purity`, `signature`, `strip`, `thunk`, `wrap`. Tests use nix-unit
+**340 tests across 22 suites** — `arg-env`, `compose`, `contract`, `crossing-adapter`,
+`crossing-adapter-set`, `crossing-contract`, `crossing-delta`, `crossing-linkset`,
+`crossing-operations`, `crossing-populations`, `crossing-term`, `entry`,
+`evalmodules-equivalence`, `identity`, `integration`, `merge-strategy`, `provenance`, `purity`,
+`signature`, `strip`, `thunk`, `wrap`. Tests use nix-unit
 in `ci/` (which keeps a `nixpkgs` dependency for the test runner and the real `lib.evalModules`
 driven by the production-safety equivalence gate and the `arg-env` crossing suite):
 
 ```bash
 cd ci
-nix run nixpkgs#nix-unit -- --flake .#tests            # all 305, across 20 suites
+nix run nixpkgs#nix-unit -- --flake .#tests            # all 340, across 22 suites
 nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
 nix flake check                                        # full check incl. treefmt
 ```
