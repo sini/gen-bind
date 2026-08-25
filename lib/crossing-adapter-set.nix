@@ -108,7 +108,7 @@ let
     wrapFn = null;
 
     # `_units` is DEAD BY CONSTRUCTION: `subUnits` is fed only by `bindArgEnv`
-    # (`crossing.nix:866`, `:752`), which is null above. Named to match the
+    # (`crossing.nix:876`, `:762`), which is null above. Named to match the
     # Adapter signature; it must not be relied on.
     wrapUnit = body: _units: body;
 
@@ -213,7 +213,7 @@ let
   # fleet cannot receive a crossing because the function signature has nowhere to
   # put one. Here it cannot receive one because the adapter DECLARES it offers no
   # position: a `Substrate`-admissible name meets `adapterMissingBindFormals`
-  # (`crossing-adapter.nix:174-181`, and again at `crossing.nix:841-847` before
+  # (`crossing-adapter.nix:174-181`, and again at `crossing.nix:851-858` before
   # any body is built — two independent sites, so the safety does not depend on
   # `placement` being consulted first), a `TargetInvoked` name meets
   # `adapterMissingTargetInvoked` (`:192-199`). Each is blamed on the adapter
