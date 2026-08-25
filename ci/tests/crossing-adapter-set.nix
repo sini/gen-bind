@@ -257,6 +257,33 @@ let
     ];
   };
 
+  # ★ THE SECOND CARRIAGE, and its asymmetry with the first is load-bearing. The
+  # target-owned field is a CONDITIONAL splice, and until this fixture existed no
+  # cell in this suite entered its true branch: every carriage above omits the
+  # field. A defect in that branch was invisible, and an equality taken over a
+  # carriage that never carries one measures half the contract.
+  systemAdapterOwned = systemTerminal.adapter {
+    nodes = {
+      peer.config.addr = "10.0.0.2";
+    };
+    extraModules = [ extraModule ];
+    osConfig.marker = "target-owned";
+  };
+
+  systemClosedOwned = pipeline {
+    imports.host = imp c.any;
+    bindings.host = plainB { name = "alpha"; };
+    withAdapter = systemAdapterOwned;
+    body = [
+      classModule
+      unrelatedModule
+    ];
+  };
+
+  specialArgsOf = closed: (systemTerminal.locateConfig closed.value).specialArgs;
+  specialArgKeysOf =
+    closed: builtins.sort builtins.lessThan (builtins.attrNames (specialArgsOf closed));
+
   systemEval = lib.evalModules {
     modules = [ optionsModule ] ++ (systemTerminal.locateConfig systemClosed.value).built;
   };
@@ -717,6 +744,50 @@ in
   flake.tests.crossing-adapter-set.test-o-trm-1-nodes-reaches-the-target-as-carriage-outside-the-governed-surface = {
     expr = (systemTerminal.locateConfig systemClosed.value).specialArgs.nodes.peer.config.addr;
     expected = "10.0.0.2";
+  };
+
+  # ══ THE WELD, SPLIT ═════════════════════════════════════════════════════════
+  #
+  # `inherit nodes;` made ONE identifier serve two contracts — the carriage formal
+  # the fold supplies and the target-facing key a class module reads. Splitting is
+  # behaviour-neutral and changes no name on either side; what it buys is that a
+  # later rename of the carriage cannot reach the target key through an `inherit`.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the target-facing key set changes, or the
+  # emitted key takes a different field of the carriage than the one it names.
+  flake.tests.crossing-adapter-set.test-weld-split-target-args-without-the-passthrough = {
+    expr = specialArgKeysOf systemClosed;
+    expected = [ "nodes" ];
+  };
+  # The other arm of the conditional, over the same terminal in the same run.
+  flake.tests.crossing-adapter-set.test-weld-split-target-args-with-the-passthrough = {
+    expr = specialArgKeysOf systemClosedOwned;
+    expected = [
+      "nodes"
+      "osConfig"
+    ];
+  };
+  flake.tests.crossing-adapter-set.test-weld-split-passthrough-rides-verbatim = {
+    expr = (specialArgsOf systemClosedOwned).osConfig;
+    expected = {
+      marker = "target-owned";
+    };
+  };
+  # CONTROL against a blind cell — the emitted key is paired with the carriage
+  # field it NAMES, not with whatever else the carriage happens to hold. The same
+  # comparison against a different field of the same carriage is false.
+  flake.tests.crossing-adapter-set.test-weld-split-emitted-key-is-paired-with-its-own-field = {
+    expr = {
+      pairedWithItsOwnField =
+        (specialArgsOf systemClosedOwned).osConfig == {
+          marker = "target-owned";
+        };
+      pairedWithAnotherField = (specialArgsOf systemClosedOwned).nodes == [ extraModule ];
+    };
+    expected = {
+      pairedWithItsOwnField = true;
+      pairedWithAnotherField = false;
+    };
   };
 
   # ══ O-TRM-2 — THE NULL-POSITION ADAPTER REFUSES BY NAME ═════════════════════

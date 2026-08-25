@@ -185,10 +185,18 @@ let
             body: _units:
             evaluator {
               modules = body ++ extraModules;
+              # ★ THE WELD, SPLIT. `inherit nodes;` made ONE identifier serve two
+              # contracts: the CARRIAGE formal the fold supplies and the
+              # TARGET-FACING key a class module reads as `nodes.<peer>.config`.
+              # Renaming the carriage side through the `inherit` silently renames
+              # the target key, and the break surfaces inside the target's own
+              # evaluation, far from the edit — which is why the natural fix is
+              # the wrong one. After the split nothing derives the target key
+              # from the carriage name.
               specialArgs = {
-                inherit nodes;
+                nodes = carriage.nodes;
               }
-              // (if carriage ? osConfig then { inherit (carriage) osConfig; } else { });
+              // (if carriage ? osConfig then { osConfig = carriage.osConfig; } else { });
             };
 
           inherit interpret;
