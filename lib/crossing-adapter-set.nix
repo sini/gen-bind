@@ -198,10 +198,23 @@ let
               # them. Pinning one framework's field name in a substrate-facing
               # contract is the defect the carriage rename removed; re-reading it
               # here would put it straight back one layer down.
-              specialArgs = {
-                nodes = extent;
-              }
-              // (carriage.passthrough or { });
+              #
+              # ★ AND THE CHANNEL MAY NOT SHADOW A KEY THIS ADAPTER EMITS. `//`
+              # gives the right operand priority, so a consumer key named `nodes`
+              # would REPLACE the peer set — silently, because the target arg is
+              # still present and still called `nodes`. The check reads the
+              # channel's SPINE, never its contents, so the opacity above holds:
+              # `?` forces nothing the `//` does not already force. Refusal is the
+              # only non-silent option; merging the other way round would drop the
+              # consumer's key instead.
+              specialArgs =
+                let
+                  passthrough = carriage.passthrough or { };
+                in
+                if passthrough ? nodes then
+                  throw "gen-bind: mkSystemTerminal: the target-owned passthrough carries `nodes`, which this adapter emits itself — splicing it would silently replace the peer set. Rename that key in the passthrough."
+                else
+                  { nodes = extent; } // passthrough;
             };
 
           inherit interpret;

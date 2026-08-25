@@ -299,6 +299,32 @@ let
     }
     // (carriage.passthrough or { });
 
+  # The target args for a carriage whose passthrough DOES / does NOT carry a key
+  # the adapter emits. Built off the adapter directly rather than through a
+  # pipeline, because a refusal has to stay catchable at the cell.
+  targetArgsForPassthrough =
+    passthrough:
+    let
+      a = systemTerminal.adapter {
+        extent = {
+          peer.config.addr = "10.0.0.2";
+        };
+        extraModules = [ ];
+        inherit passthrough;
+      };
+    in
+    (a.wrapUnit [ ] [ ]).config.specialArgs;
+
+  collidingTargetArgs = targetArgsForPassthrough {
+    nodes = "SHADOWED";
+    osConfig.marker = "target-owned";
+  };
+  nonCollidingTargetArgs = targetArgsForPassthrough {
+    osConfig.marker = "target-owned";
+  };
+
+  refuses = v: !(builtins.tryEval (builtins.deepSeq v v)).success;
+
   # A class module written the way class modules are written: it NAMES `nodes` as
   # a formal and reads a peer's resolved config through it. This is the reader
   # O-WELD-2 exists for, and it is evaluated THROUGH the module system rather than
@@ -912,6 +938,47 @@ in
   flake.tests.crossing-adapter-set.test-o-weld-2-passthrough-keys-are-the-consumers-own = {
     expr = (specialArgsOf systemClosedOwned).osConfig.marker;
     expected = "target-owned";
+  };
+
+  # ══ THE PASSTHROUGH MAY NOT SHADOW A KEY THE ADAPTER EMITS ══════════════════
+  #
+  # The channel splices into `specialArgs`, and `//` gives the right operand
+  # priority — so a consumer key named `nodes` REPLACES the peer set. Silently:
+  # the target arg is still called `nodes`, still present, and now holds the
+  # consumer's value instead of the realized peers.
+  #
+  # ★ NO O-WELD-2 CELL CAN CATCH THIS, which is why it needs its own. Those cells
+  # read the key SET (unchanged by a collision — `nodes` is already in it), run on
+  # a carriage carrying no passthrough at all, or seed the migration defect.
+  # O-WELD-2 discriminates the correct migration from the sweep-produced one; it
+  # says nothing about consumer-supplied keys.
+  #
+  # ★ THE REFUSAL READS THE CHANNEL'S SPINE, NOT ITS CONTENTS, so the "this
+  # surface never reads inside the channel" posture is untouched: `?` forces
+  # nothing beyond what the `//` already forces. Refusal is also the only
+  # non-silent option — reversing the merge order would silently DROP the
+  # consumer's key instead.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the collision is accepted, the peer set is
+  # gone, and every fixture in this suite is still green.
+  flake.tests.crossing-adapter-set.test-passthrough-may-not-shadow-an-emitted-key = {
+    expr = refuses collidingTargetArgs;
+    expected = true;
+  };
+  # CONTROL, same predicate, same run — a passthrough whose keys do NOT collide is
+  # accepted, and the peer set survives it. Without this the refusal above is
+  # equally satisfied by an adapter that refuses every passthrough.
+  flake.tests.crossing-adapter-set.test-control-non-colliding-passthrough-is-accepted = {
+    expr = {
+      accepted = !(refuses nonCollidingTargetArgs);
+      peerSetSurvives = builtins.attrNames nonCollidingTargetArgs.nodes;
+      consumerKeyArrives = nonCollidingTargetArgs.osConfig.marker;
+    };
+    expected = {
+      accepted = true;
+      peerSetSurvives = [ "peer" ];
+      consumerKeyArrives = "target-owned";
+    };
   };
 
   # ══ O-TRM-2 — THE NULL-POSITION ADAPTER REFUSES BY NAME ═════════════════════
