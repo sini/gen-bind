@@ -149,6 +149,18 @@ let
   # validators covered is the design of record's own open question, carried
   # forward and not settled here. O-TRM-3 asserts the residue; it does not decide
   # the row.
+  #
+  # ★★ AND THE cfg-LEVEL CHANNEL, WHICH IS NOT A RESIDUE BUT A RETIREMENT.
+  # The retired `terminalBind` surface accepted a call-level cfg and forwarded
+  # it whole into `wrapAllCore` — `contracts`, `provenance`, `mergeStrategies`,
+  # `defaultMergeStrategy`, `thunkBindings`, `producerConfigs`. That channel
+  # has NO position in this Adapter surface: `bindFormals` below builds
+  # `{ modules; bindings; }` and nothing else, so every other cfg member holds
+  # its default — a deliberate narrowing, by design of the Adapter contract,
+  # not an omission awaiting a field. The surviving spelling is per value:
+  # `_mergeStrategy` INSIDE a binding value (`wrap.nix:58-61` reads it there).
+  # A consumer that wants one strategy uniform across its values spells it on
+  # each value.
   mkSystemTerminal =
     { evaluator, locateConfig }:
     {
