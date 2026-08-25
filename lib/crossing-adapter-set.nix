@@ -122,16 +122,16 @@ let
   #
   # ★ THE TWO CONSTRUCTIONS ARE DIFFERENT AND THE SPLIT IS STRUCTURAL HERE.
   # `evaluator` and `locateConfig` are captured when the terminal is built;
-  # `nodes`, `extraModules` and `osConfig` arrive PER MEMBER INVOCATION, which is
-  # why `adapter` below is a function of the carriage. ⇒ the Adapter is built per
-  # member, not once per terminal.
+  # `extent`, `extraModules` and `passthrough` arrive PER MEMBER INVOCATION, which
+  # is why `adapter` below is a function of the carriage. ⇒ the Adapter is built
+  # per member, not once per terminal.
   #
-  # ★★ THE CARRIAGE RESIDUES (§2.3.4). `nodes`, `extraModules`, `evaluator` and
-  # `osConfig` travel by CLOSURE, not as placed `Binding`s, so δ cannot see them
+  # ★★ THE CARRIAGE RESIDUES (§2.3.4). `extent`, `extraModules`, `evaluator` and
+  # `passthrough` travel by CLOSURE, not as placed `Binding`s, so δ cannot see them
   # and `E(u)` cannot count them. Two of the three are scope residues —
   # `extraModules` is target-owned content the substrate never inspects, and
-  # `evaluator`/`osConfig` carry no reach of their own. `nodes` IS a correctness
-  # residue and it is SILENT: it is the realized peer set, so a missed edge to a
+  # `evaluator`/`passthrough` carry no reach of their own. `extent` IS a
+  # correctness residue and it is SILENT: it is the realized peer set, so a missed edge to a
   # peer leaves the value correct and makes `E(u)` under-report, which can render
   # `linked(u)` wrongly true. It stays a raw attrset accessor OUTSIDE the
   # governed query surface — no mark, no narrowing, widening trivially
@@ -156,7 +156,7 @@ let
 
       adapter =
         {
-          nodes,
+          extent,
           extraModules,
           ...
         }@carriage:
@@ -185,18 +185,23 @@ let
             body: _units:
             evaluator {
               modules = body ++ extraModules;
-              # ★ THE WELD, SPLIT. `inherit nodes;` made ONE identifier serve two
-              # contracts: the CARRIAGE formal the fold supplies and the
-              # TARGET-FACING key a class module reads as `nodes.<peer>.config`.
-              # Renaming the carriage side through the `inherit` silently renames
-              # the target key, and the break surfaces inside the target's own
-              # evaluation, far from the edit — which is why the natural fix is
-              # the wrong one. After the split nothing derives the target key
-              # from the carriage name.
+              # ★ THE TWO SIDES ARE DIFFERENT CONTRACTS AND THE SPLIT IS WHAT
+              # KEEPS THEM APART. `nodes` here is TARGET-FACING — what a class
+              # module reads as `nodes.<peer>.config` — and it stays `nodes` by
+              # construction, because after the split nothing derives it from the
+              # carriage name. The carriage side is `extent`: the realized set for
+              # this class, whose spine is the class's node keys.
+              #
+              # `passthrough` is the TARGET-OWNED channel and it splices WHOLE.
+              # Its keys are the consumer's own — `osConfig` is home-manager's arg
+              # name and is correct AT the surface — so this adapter names none of
+              # them. Pinning one framework's field name in a substrate-facing
+              # contract is the defect the carriage rename removed; re-reading it
+              # here would put it straight back one layer down.
               specialArgs = {
-                nodes = carriage.nodes;
+                nodes = extent;
               }
-              // (if carriage ? osConfig then { osConfig = carriage.osConfig; } else { });
+              // (carriage.passthrough or { });
             };
 
           inherit interpret;
@@ -208,7 +213,7 @@ let
   # ADAPTER: every placement position is `null`.
   #
   # ★★★ NORMATIVE (§2.3.3(a)) — THIS ADAPTER MUST NOT GROW `bindFormals`,
-  # `bindArgEnv`, `wrapFn`, `nodes` OR `bindings`. The corpus census's zero for a
+  # `bindArgEnv`, `wrapFn`, `extent` OR `bindings`. The corpus census's zero for a
   # flake fleet receiving a cross-unit deferred is a zero BY CONSTRUCTION at this
   # contract: the source signature had nowhere to put one. Growing an offered
   # position converts that into an as-authored zero, AND NOTHING DOWNSTREAM WOULD

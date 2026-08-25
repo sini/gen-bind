@@ -241,7 +241,7 @@ let
   };
 
   systemAdapter = systemTerminal.adapter {
-    nodes = {
+    extent = {
       peer.config.addr = "10.0.0.2";
     };
     extraModules = [ extraModule ];
@@ -263,11 +263,14 @@ let
   # field. A defect in that branch was invisible, and an equality taken over a
   # carriage that never carries one measures half the contract.
   systemAdapterOwned = systemTerminal.adapter {
-    nodes = {
+    extent = {
       peer.config.addr = "10.0.0.2";
     };
     extraModules = [ extraModule ];
-    osConfig.marker = "target-owned";
+    # The channel's CONTENT is the consumer's own vocabulary. `osConfig` is
+    # home-manager's arg name and is correct HERE — framework naming is surface
+    # vocabulary at the surface; what was wrong was pinning it as a carriage field.
+    passthrough.osConfig.marker = "target-owned";
   };
 
   systemClosedOwned = pipeline {
@@ -283,6 +286,43 @@ let
   specialArgsOf = closed: (systemTerminal.locateConfig closed.value).specialArgs;
   specialArgKeysOf =
     closed: builtins.sort builtins.lessThan (builtins.attrNames (specialArgsOf closed));
+
+  # ★ THE SWEEP-PRODUCED ADAPTER, kept live as O-WELD-2's seeded defect rather
+  # than performed once. This is step 2 done WITHOUT step 1: the rename followed
+  # the `inherit`, so the carriage name reaches straight through to the target
+  # key and every class module reading `nodes.<peer>` breaks inside the target's
+  # own evaluation.
+  weldFollowingSpecialArgs =
+    carriage:
+    {
+      inherit (carriage) extent;
+    }
+    // (carriage.passthrough or { });
+
+  # A class module written the way class modules are written: it NAMES `nodes` as
+  # a formal and reads a peer's resolved config through it. This is the reader
+  # O-WELD-2 exists for, and it is evaluated THROUGH the module system rather than
+  # inspected as data — the target-facing contract is only real at the target.
+  peerReaderModule =
+    { nodes, ... }:
+    {
+      options.peerAddr = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+      };
+      config.peerAddr = nodes.peer.config.addr;
+    };
+
+  targetEval =
+    closed:
+    lib.evalModules {
+      modules = [
+        optionsModule
+        peerReaderModule
+      ]
+      ++ (systemTerminal.locateConfig closed.value).built;
+      specialArgs = specialArgsOf closed;
+    };
 
   systemEval = lib.evalModules {
     modules = [ optionsModule ] ++ (systemTerminal.locateConfig systemClosed.value).built;
@@ -357,7 +397,7 @@ let
 
   crossingPathModules =
     (systemTerminal.adapter {
-      nodes = { };
+      extent = { };
       extraModules = [ ];
     }).bindFormals
       { host = collidingValue; }
@@ -408,7 +448,7 @@ let
     locatorArgs
     // {
       withAdapter = dotConfigTerminal.adapter {
-        nodes = { };
+        extent = { };
         extraModules = [ ];
       };
     }
@@ -418,7 +458,7 @@ let
     locatorArgs
     // {
       withAdapter = isConfigTerminal.adapter {
-        nodes = { };
+        extent = { };
         extraModules = [ ];
       };
     }
@@ -788,6 +828,90 @@ in
       pairedWithItsOwnField = true;
       pairedWithAnotherField = false;
     };
+  };
+
+  # ══ O-NAME-1b — THE CARRIAGE FORMAL ═════════════════════════════════════════
+  #
+  # ★ SITE-SCOPED BY CONSTRUCTION, AND THAT IS THE WHOLE POINT. The predicate is
+  # `functionArgs` over the adapter itself, so its domain is exactly the carriage
+  # formal set and nothing else. A token-scoped version of this claim goes GREEN
+  # by renaming `nodes` anywhere in this repository — and 21 of the 28 bare-token
+  # sites here are the crossing's OWN minted nodes and the `Lit` node budget,
+  # which are the ruled substrate term used CORRECTLY. Renaming those is the
+  # broken outcome, and a token sweep passes on it.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: `nodes` reappears as a carriage formal — the
+  # delivery surface's rename reverted or half-applied.
+  flake.tests.crossing-adapter-set.test-o-name-1b-carriage-formals-carry-no-framework-name = {
+    expr = builtins.sort builtins.lessThan (
+      builtins.attrNames (builtins.functionArgs systemTerminal.adapter)
+    );
+    expected = [
+      "extent"
+      "extraModules"
+    ];
+  };
+  # CONTROL, same predicate, same run — `nodes` is genuinely absent from the
+  # carriage formals while being genuinely PRESENT one contract over, in the
+  # target args. An absence read over an unreachable formal set would look
+  # identical to the row above.
+  flake.tests.crossing-adapter-set.test-o-name-1b-control-nodes-absent-here-present-at-the-target = {
+    expr = {
+      inCarriageFormals = builtins.functionArgs systemTerminal.adapter ? nodes;
+      inTargetArgs = specialArgsOf systemClosed ? nodes;
+    };
+    expected = {
+      inCarriageFormals = false;
+      inTargetArgs = true;
+    };
+  };
+
+  # ══ O-WELD-2 — THE TARGET-FACING KEY SURVIVED ═══════════════════════════════
+  #
+  # THE ONLY CELL THAT DISTINGUISHES THE CORRECT MIGRATION FROM THE SWEEP-PRODUCED
+  # ONE. From the carriage side the two are identical — both rename the formal to
+  # `extent`. They differ only in what the TARGET receives.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the target arg set carries `extent` instead of
+  # `nodes`, and every class module reading `nodes.<peer>.config` dies inside the
+  # target's own evaluation, far from the edit that caused it.
+  flake.tests.crossing-adapter-set.test-o-weld-2-target-args-still-carry-the-peer-key = {
+    expr = builtins.elem "nodes" (specialArgKeysOf systemClosed);
+    expected = true;
+  };
+  # …and a class module whose formals NAME `nodes` really does receive the peer
+  # set, measured THROUGH the module system rather than by reading the arg set as
+  # data. The target-facing contract is only real at the target.
+  flake.tests.crossing-adapter-set.test-o-weld-2-a-module-naming-nodes-receives-the-peer-set = {
+    expr = (targetEval systemClosed).config.peerAddr;
+    expected = "10.0.0.2";
+  };
+  # THE SEEDED DEFECT — step 2 without step 1, live in the suite. It is measured
+  # AT THE CHANNEL rather than by watching the module break, for the reason this
+  # file already records for the arg-environment rival: an absent module argument
+  # is an evaluation ERROR, not a `throw`, so `tryEval` does not catch it and a
+  # cell written to observe the break would ABORT the suite instead of reporting
+  # it. The two arg sets differ, and that difference is the discrimination.
+  flake.tests.crossing-adapter-set.test-o-weld-2-control-the-sweep-produced-adapter-loses-the-peer-key = {
+    expr = builtins.sort builtins.lessThan (
+      builtins.attrNames (weldFollowingSpecialArgs {
+        extent = {
+          peer.config.addr = "10.0.0.2";
+        };
+        extraModules = [ ];
+        passthrough.osConfig.marker = "target-owned";
+      })
+    );
+    expected = [
+      "extent"
+      "osConfig"
+    ];
+  };
+  # The passthrough's keys reach the target under the CONSUMER's own names, which
+  # is the whole content of "target-owned": this adapter names none of them.
+  flake.tests.crossing-adapter-set.test-o-weld-2-passthrough-keys-are-the-consumers-own = {
+    expr = (specialArgsOf systemClosedOwned).osConfig.marker;
+    expected = "target-owned";
   };
 
   # ══ O-TRM-2 — THE NULL-POSITION ADAPTER REFUSES BY NAME ═════════════════════
