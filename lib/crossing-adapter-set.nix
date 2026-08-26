@@ -139,16 +139,25 @@ let
   # elsewhere and UNDELIVERED; this construction does not deliver it, and a
   # reading of this file that takes the move as discharging it has overclaimed.
   #
-  # ★★ AND ONE CAPABILITY RESIDUE, WHICH IS A DIFFERENT KIND OF THING.
-  # `wrapAll`'s `.all` is `mods ++ vals` — the wrapped modules PLUS merge
-  # collision validators (`merge-strategy.nix:32`), which raise a `throw` INSIDE
-  # the target's own evaluation. This surface cannot express that: a `Refusal`
-  # here is a tagged VALUE, never a throw. ⇒ `bindFormals` below returns
-  # `.modules`, NOT `.all`, and the validator-append is a RESIDUE rather than a
-  # relocation. Whether §2.11 owes a refusal row for the collision class those
-  # validators covered is the design of record's own open question, carried
-  # forward and not settled here. O-TRM-3 asserts the residue; it does not decide
-  # the row.
+  # ★★ AND THE COLLISION CLASS, WHICH IS NAMED RATHER THAN REFUSED. A crossed
+  # binding shadowing a value the target's module system supplies for the same
+  # name is observable ONLY inside the target's evaluation — the substrate never
+  # sees the target's arg environment — so the named surface is the retired
+  # validator itself: `bindFormals` below returns `.all` (`mods ++ vals`,
+  # `wrap.nix:314`), carrying the merge-collision validators
+  # (`merge-strategy.nix:32`) into the target's module set, where a collision
+  # lands in the `warnings` channel under the retired surface's own message
+  # family ("gen-bind: binding '<name>' collision — bind-wins, module-system
+  # value shadowed"). This is WARN-AND-PROCEED, not a refusal: the design of
+  # record's §2.11 holds refusals only, and its sibling block names this class
+  # as warned-at-the-target. A substrate `Refusal` stays a tagged VALUE, never a
+  # throw — nothing here changes that; the one throw a validator can raise is
+  # the per-value `_mergeStrategy = "error"` spelling, the consumer's own
+  # opt-in, raised inside the consumer's own evaluation exactly as the retired
+  # surface raised it. The price, stated: a validator DEFINES `warnings`, so a
+  # target evaluation receiving a crossed binding must declare that option —
+  # true of every NixOS-shaped target, and the same imposition the retired
+  # surface made.
   #
   # ★★ AND THE cfg-LEVEL CHANNEL, WHICH IS NOT A RESIDUE BUT A RETIREMENT.
   # The retired `terminalBind` surface accepted a call-level cfg and forwarded
@@ -176,13 +185,15 @@ let
           # `Body` is the class module LIST. The design of record's amendment A
           # rules this identification by name: `wrapAll`'s partial
           # application into the module functions' formal parameters IS
-          # `Adapter.bindFormals`.
+          # `Adapter.bindFormals`. `.all` = the wrapped modules plus the
+          # merge-collision validators — the collision class's named surface
+          # (see the header block above).
           bindFormals =
             values: body:
             (wrapLib.wrapAllCore {
               modules = body;
               bindings = values;
-            }).modules;
+            }).all;
 
           # No system-terminal name is target-invoked. A `false` congruence
           # predicate meets `adapterMissingTargetInvoked` and is refused by name

@@ -148,6 +148,14 @@ let
       type = lib.types.str;
       default = "";
     };
+    # The system terminal's `bindFormals` carries the merge-collision validators
+    # (`.all`), and a validator DEFINES `warnings` — a target evaluation
+    # receiving a crossed binding must declare the option, as NixOS-shaped
+    # targets do. This fixture models that target contract.
+    options.warnings = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+    };
   };
 
   reachBody = {
@@ -795,11 +803,13 @@ in
   flake.tests.crossing-adapter-set.test-o-trm-1-extraModules-rides-the-closure-not-the-target-unit-list = {
     expr = {
       appended = builtins.elem extraModule (systemTerminal.locateConfig systemClosed.value).built;
+      # Four: the two body modules, the merge-collision validator `.all`
+      # appends for the wrapped one, and the extra module.
       count = builtins.length (systemTerminal.locateConfig systemClosed.value).built;
     };
     expected = {
       appended = true;
-      count = 3;
+      count = 4;
     };
   };
 
@@ -1066,34 +1076,66 @@ in
     };
   };
 
-  # ══ O-TRM-3 — the validator-append is a DECLARED residue ════════════════════
+  # ══ O-TRM-3 — the collision class is NAMED at the crossing's own surface ════
   #
-  # A CAPABILITY residue, not a carriage one: `wrapAll`'s `.all` is
-  # `mods ++ vals`, and those validators raise a `throw` INSIDE the target's own
-  # evaluation. This surface cannot express that — a `Refusal` here is a tagged
-  # VALUE, never a throw — so the successor returns `.modules` and the
-  # validator-append is a residue rather than a relocation.
+  # The validator-append CROSSES: `bindFormals` returns `.all` (`mods ++ vals`),
+  # so the crossing path carries the same merge-collision validators the shipped
+  # `wrapAll` path appends, and a crossed binding shadowing a module-system
+  # value for the same name is named in the target's `warnings` channel instead
+  # of evaluating silent bind-wins. An earlier revision of this suite asserted
+  # the OPPOSITE — the crossing path returned `.modules` and the validator was a
+  # declared residue; that residue is discharged, the collision class being
+  # measured writable through declare→link→close.
   #
-  # WHAT A FAILING RUN LOOKS LIKE: the counts match, meaning the successor is
-  # carrying validators after all and this comment is false.
-  flake.tests.crossing-adapter-set.test-o-trm-3-the-crossing-path-returns-modules-only = {
+  # WHAT A FAILING RUN LOOKS LIKE: the crossing path's count falls back to the
+  # module count alone, meaning the validators were dropped and the collision
+  # class is silent again.
+  flake.tests.crossing-adapter-set.test-o-trm-3-the-crossing-path-carries-the-validator-append = {
     expr = {
       crossingPath = builtins.length crossingPathModules;
       shippedPathAll = builtins.length shippedPath.all;
       shippedPathValidators = builtins.length shippedPath.validators;
     };
     expected = {
-      crossingPath = 1;
+      crossingPath = 2;
       shippedPathAll = 2;
       shippedPathValidators = 1;
     };
   };
 
-  # The residue asserted directly: a collision `wrapAll`'s appended validators
-  # would have caught is NOT refused by the crossing.
+  # The naming is a target-side diagnostic, never a substrate refusal: the
+  # crossing itself still closes Ok on a colliding binding — a `Refusal` is a
+  # tagged VALUE, and this class is warn-and-proceed inside the target.
   flake.tests.crossing-adapter-set.test-o-trm-3-the-crossing-does-not-refuse-a-merge-collision = {
     expr = x.isOk collisionClosed;
     expected = true;
+  };
+
+  # The named surface, end to end: a binding crossed through declare→link→close
+  # into a target evaluation whose module system supplies the SAME name lands
+  # the retired validator's message — the binding and the resolution, by name —
+  # in the target's `warnings` channel.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: `warnings` reads empty with the collision
+  # present — the silent bind-wins this cell exists to refuse.
+  flake.tests.crossing-adapter-set.test-o-trm-3-a-collision-is-named-in-the-targets-warnings-channel = {
+    expr =
+      (lib.evalModules {
+        modules = [
+          optionsModule
+          { _module.args.host = "from-the-module-system"; }
+        ]
+        ++ (systemTerminal.locateConfig systemClosed.value).built;
+      }).config.warnings;
+    expected = [ "gen-bind: binding 'host' collision — bind-wins, module-system value shadowed" ];
+  };
+
+  # ★ THE GREEN TWIN, same fixtures minus the colliding definition: no collision
+  #   ⇒ no message. Without it the cell above cannot distinguish "names the
+  #   collision" from "warns on every crossed binding".
+  flake.tests.crossing-adapter-set.test-control-o-trm-3-no-collision-no-message = {
+    expr = systemEval.config.warnings;
+    expected = [ ];
   };
 
   # ★ THE CONTROL, IN THE SAME RUN: the collision under the SHIPPED `wrapAll`
@@ -1122,15 +1164,21 @@ in
   # one — which is the silent misread §2.3.3(b) forbids.
   flake.tests.crossing-adapter-set.test-o-trm-4-both-terminals-resolve-their-evaluated-config = {
     expr = {
-      dotConfig = (dotConfigTerminal.locateConfig dotConfigClosed.value).built;
-      isConfig = (isConfigTerminal.locateConfig isConfigClosed.value).built;
+      dotConfig = builtins.head (dotConfigTerminal.locateConfig dotConfigClosed.value).built;
+      isConfig = builtins.head (isConfigTerminal.locateConfig isConfigClosed.value).built;
     };
     # `classModule`'s only named formal is the bound one, so `wrapAll` applies it
-    # FULLY and the module list carries the applied attrset rather than a lambda
-    # — which is also why this comparison can be an equality at all.
+    # FULLY and the list's head carries the applied attrset rather than a lambda
+    # — which is also why this comparison can be an equality at all. The head,
+    # not the list: `.all` trails the merge-collision validator, a function, and
+    # functions do not compare.
     expected = {
-      dotConfig = [ { config.result = "alpha"; } ];
-      isConfig = [ { config.result = "alpha"; } ];
+      dotConfig = {
+        config.result = "alpha";
+      };
+      isConfig = {
+        config.result = "alpha";
+      };
     };
   };
 
