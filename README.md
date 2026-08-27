@@ -681,14 +681,14 @@ Removes `bindingNames` from the module's advertised formal args. Works on functi
 ### `buildSignature`
 
 ```nix
-buildSignature { module; bindings; defaultMergeStrategy; mergeStrategies; provenance ? {}; }
+buildSignature { module; bindings; defaultMergeStrategy; mergeStrategies; provenance ? {}; vocabulary ? null; }
 ```
 
 Computes a signature record: `{ requires; bound; unsatisfied; mergeStrategies }`.
 
 - `requires` — formal args not satisfied by bindings (pass to `evalModules`)
 - `bound` — `{ argName = { optional; provenance; }; }` for each injected arg
-- `unsatisfied` — arg names in vocabulary but not injected and not optional (currently always `[]` with the standard API)
+- `unsatisfied` — arg names in `vocabulary` but not injected and not optional. `vocabulary` is what a caller declares it may supply — broader than the `bindings` of a single wrap site in a layered composition. Default `null` collapses `vocabulary` to `bindings`' own keys, so with the standard API this stays `[]` (honestly — nothing outside `bindings` was ever declared as forthcoming)
 - `mergeStrategies` — per-bound-arg strategy
 
 ### `adaptArgs`

@@ -97,6 +97,100 @@ in
     };
   };
 
+  # Prior defect: inVocabulary and isBound both tested `bindings`, so the
+  # conjunction was unsatisfiable and this field was structurally always [].
+  # `vocabulary` gives inVocabulary an independent source — a name the caller
+  # declares forthcoming that this call's bindings didn't supply.
+  flake.tests.signature.test-unsatisfied-reports-missing-vocabulary-key = {
+    expr =
+      let
+        sig = buildSignature {
+          module =
+            {
+              host,
+              user,
+              config,
+              ...
+            }:
+            { };
+          bindings = {
+            host = {
+              name = "igloo";
+            };
+          };
+          defaultMergeStrategy = "bind-wins";
+          mergeStrategies = { };
+          vocabulary = [
+            "host"
+            "user"
+          ];
+        };
+      in
+      sig.unsatisfied;
+    expected = [ "user" ];
+  };
+
+  flake.tests.signature.test-control-fully-satisfied-vocabulary-stays-empty = {
+    expr =
+      let
+        sig = buildSignature {
+          module =
+            {
+              host,
+              user,
+              config,
+              ...
+            }:
+            { };
+          bindings = {
+            host = {
+              name = "igloo";
+            };
+            user = {
+              name = "tux";
+            };
+          };
+          defaultMergeStrategy = "bind-wins";
+          mergeStrategies = { };
+          vocabulary = [
+            "host"
+            "user"
+          ];
+        };
+      in
+      sig.unsatisfied;
+    expected = [ ];
+  };
+
+  flake.tests.signature.test-unsatisfied-excludes-optional-missing-vocabulary-key = {
+    expr =
+      let
+        sig = buildSignature {
+          module =
+            {
+              host,
+              user ? null,
+              config,
+              ...
+            }:
+            { };
+          bindings = {
+            host = {
+              name = "igloo";
+            };
+          };
+          defaultMergeStrategy = "bind-wins";
+          mergeStrategies = { };
+          vocabulary = [
+            "host"
+            "user"
+          ];
+        };
+      in
+      sig.unsatisfied;
+    expected = [ ];
+  };
+
   flake.tests.signature.test-non-function-empty-signature = {
     expr =
       let
