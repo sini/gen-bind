@@ -60,7 +60,8 @@ The mental model is a single pipeline over four parallel keyed maps, all indexed
 arg name:
 
 - **bindings** — the external values to inject (`{ host = ...; }`),
-- **contracts** — lazy per-binding assertions that fire only when the arg is demanded,
+- **contracts** — lazy per-binding assertions that fire when the arg is demanded (one
+  narrowing, for a colliding binding — see [Lazy Contracts](#lazy-contracts)),
 - **provenance** — blame metadata that names the source in every error message,
 - **mergeStrategies** — collision policy when a binding name shadows a module-system arg.
 
@@ -253,7 +254,9 @@ result = genBind.wrap {
 
 ### Lazy Contracts
 
-Contracts are assertions that fire only when the bound value is demanded — preserving Nix's lazy evaluation semantics. Unbuilt modules have zero contract cost.
+Contracts are assertions that fire when the bound value is demanded — preserving Nix's lazy evaluation semantics. An unbuilt module pays no contract cost for a binding it never reads.
+
+**One narrowing.** A binding that *collides* with a module-system arg is forced when `config.warnings` is demanded, so a contract on it can fire for an arg the module never demanded. `mkMergeValidator` has to read the value to report which side of the collision won: for an annotated binding the strategy lives *inside* the value (`_mergeStrategy`). Absent a collision, or absent a demand for `config.warnings`, nothing is forced.
 
 ```nix
 result = genBind.wrap {
@@ -725,9 +728,17 @@ Returns a terminal module-function that resolves `module` in a nested `crossEval
 
 ## Laziness Guarantees
 
-- Binding values are never forced at `wrap` time — `builtins.functionArgs` introspects without evaluating.
-- Per-arg injection uses `//` semantics — only args the module actually demands are forced.
-- Contracts fire on demand only — the contract thunk wraps the binding value in an `assert`; if the module never demands the arg, the contract never runs.
+- Binding values are never forced at `wrap` time — `builtins.functionArgs` introspects without
+  evaluating, and membership in the injected attrset is value-free. Scope: on the
+  partial-application branch nothing is forced until `evalModules` calls the wrapper, but on
+  the fully-applied branch `.module` **is** the called module, so demanding it forces whatever
+  the module body demands.
+- Per-arg injection is per-key — each bound arg is injected as its own thunk, so only args the
+  module actually demands are forced. Reading one binding never forces a sibling.
+- Contracts fire on demand — the contract thunk wraps the binding value in an `assert`; if the
+  module never demands the arg, the contract never runs. **Narrowing:** a binding that collides
+  with a module-system arg is forced when `config.warnings` is demanded — see
+  [Lazy Contracts](#lazy-contracts).
 - Unbuilt hosts have zero cost — thunks in list bindings resolve only when the wrapper function is called by `evalModules`.
 - Terminal-crossing transforms force nothing at construction — `adaptArgs`/`configGate` return a module-function; `adapt`/`gate`/`module` are forced only when `evalModules` applies it.
 
