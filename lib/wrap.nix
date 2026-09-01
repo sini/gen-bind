@@ -62,23 +62,6 @@ let
     else
       defaultMergeStrategy;
 
-  # Detect which binding args contain thunks (auto or explicit).
-  # When thunkBindings is null, auto-detect by checking if binding values are
-  # lists containing thunk markers. Auto-detection only checks `? __configThunk`
-  # on list entries — it does NOT force the entry values themselves.
-  detectThunkArgs =
-    thunkBindings: bindings: boundArgNames:
-    if thunkBindings != null then
-      builtins.filter (k: builtins.elem k boundArgNames) thunkBindings
-    else
-      builtins.filter (
-        k:
-        let
-          v = bindings.${k} or null;
-        in
-        builtins.isList v && builtins.any (entry: builtins.isAttrs entry && entry ? __configThunk) v
-      ) boundArgNames;
-
   # Core wrapping for function modules.
   wrapFunctionModule =
     cfg: module:
@@ -120,15 +103,40 @@ let
           inherit mergeStrategies defaultMergeStrategy bindings;
         };
 
-        # Partition by merge strategy
-        systemWinsNames = builtins.filter (k: policy k == "system-wins") boundArgNames;
-        bindWinsNames = builtins.filter (k: policy k != "system-wins") boundArgNames;
+        # Per-key thunk decision — the same predicate the eager detection used,
+        # asked one key at a time so it forces only the key being demanded.
+        isThunkArg =
+          k:
+          if thunkBindings != null then
+            builtins.elem k thunkBindings
+          else
+            let
+              v = bindings.${k} or null;
+            in
+            builtins.isList v && builtins.any (entry: builtins.isAttrs entry && entry ? __configThunk) v;
 
-        systemWinsArgs = prelude.genAttrs systemWinsNames (k: bindings.${k});
-        bindWinsArgs = prelude.genAttrs bindWinsNames (k: bindings.${k});
-
-        thunkArgNames = detectThunkArgs thunkBindings bindings boundArgNames;
-        hasThunks = thunkArgNames != [ ];
+        # The injected value for ONE bound arg. Membership in the injected attrset is
+        # value-free (boundArgNames is functionArgs ∩ bindings keys); the merge-policy
+        # decision and the thunk decision live INSIDE this thunk, so a binding value is
+        # forced only when the module demands that specific arg. Chitil 2012 §2 — the
+        # assertion thunk is not forced until the consumer demands it.
+        bindValue =
+          { moduleCallArgs, thunkConfig }:
+          k:
+          if policy k == "system-wins" then
+            moduleCallArgs.${k} or bindings.${k}
+          else if isThunkArg k then
+            (thunkLib.resolveThunks {
+              config = thunkConfig;
+              ctx = bindings;
+              thunkArgNames = [ k ];
+              inherit producerConfigs;
+              bindings = {
+                ${k} = bindings.${k};
+              };
+            }).${k}
+          else
+            bindings.${k};
 
         # Build the validator for collision detection
         validator = mergeStrategyLib.mkMergeValidator {
@@ -154,8 +162,9 @@ let
         # The fully-applied path is thunk-aware (consistent with the partial-app
         # branch below): a bound arg may still carry a __configThunk (e.g. a
         # channel-only consumer `{ ch, ... }` whose every named formal is bound,
-        # so allMatched holds, yet `ch` is a producer-emitted config-thunk). When
-        # hasThunks, resolve over the bound args BEFORE applying. producerConfigs
+        # so allMatched holds, yet `ch` is a producer-emitted config-thunk). The
+        # per-key thunk decision lives inside `bindValue`, so such a binding is
+        # resolved when the module demands that arg. producerConfigs
         # is self-sufficient for __sourceScope thunks (they resolve against the
         # PRODUCER config, not a consumer config) — the actual target here. A
         # null-scope thunk on this path has no evalModules `config` to read (if it
@@ -163,17 +172,12 @@ let
         # the partial-app path); it resolves against a bound `config` arg if one
         # was supplied, else `{}` — a documented ~vacuous edge.
         let
-          resolvedBind =
-            if hasThunks then
-              thunkLib.resolveThunks {
-                config = systemWinsArgs.config or bindWinsArgs.config or { };
-                ctx = bindings;
-                inherit thunkArgNames producerConfigs;
-                bindings = bindWinsArgs;
-              }
-            else
-              bindWinsArgs;
-          applied = module (systemWinsArgs // resolvedBind);
+          applied = module (
+            prelude.genAttrs boundArgNames (bindValue {
+              moduleCallArgs = { };
+              thunkConfig = if builtins.elem "config" boundArgNames then bindings.config else { };
+            })
+          );
         in
         {
           module = applied;
@@ -186,19 +190,13 @@ let
         let
           wrapper =
             moduleCallArgs:
-            let
-              resolvedBind =
-                if hasThunks then
-                  thunkLib.resolveThunks {
-                    config = moduleCallArgs.config or { };
-                    ctx = bindings;
-                    inherit thunkArgNames producerConfigs;
-                    bindings = bindWinsArgs;
-                  }
-                else
-                  bindWinsArgs;
-            in
-            module (systemWinsArgs // moduleCallArgs // resolvedBind);
+            module (
+              moduleCallArgs
+              // prelude.genAttrs boundArgNames (bindValue {
+                inherit moduleCallArgs;
+                thunkConfig = moduleCallArgs.config or { };
+              })
+            );
 
           wrappedModule = moduleConvention.setFunctionArgs wrapper remainingArgs;
         in
