@@ -153,6 +153,8 @@ The mechanism by which a substrate-resolved value enters an eval gen does not ow
 
 ## Measured traps
 
+<!-- gen-citations:begin -->
+
 Each row verified in this run by evaluating against the flake `.lib` (`b`). Shared fixtures: `blind = { a, config }: { untouched = "no read of a"; }` (never reads `a`); `failing = b.contract.isType "string"` against binding `a = 1`; `apply r = r.module.__functor r.module { config = {}; }`; `okD e = (builtins.tryEval (builtins.deepSeq e e)).success`.
 
 | Trap | Evidence |
@@ -190,6 +192,8 @@ Each row verified in this run by evaluating against the flake `.lib` (`b`). Shar
 | ★★ THE DEMAND ANALYSIS IGNORES ACCESS MARKS — a `Floor` mark narrows `crossings` and `E`, never the analysis | an analysis a gate is trusted for may not have its domain narrowed by an access mark. A Floor-marked `Termed(ReadFrom u)` still contributes `u`. The earlier cut was FAIL-OPEN: it reported an empty demand set and the congruence predicate then admitted a substrate placement the value cannot support. Tests: `crossing-delta.test-floor-mark-does-not-blind-the-analysis`, `test-floor-marked-chain-is-not-substrate-admissible`, `crossing-linkset.test-the-mark-narrows-the-query-never-the-analysis` |
 | A merged multi-body fragment refuses at `close` rather than dropping a body — `Body` is target-owned and only an Adapter produces or consumes one, so the substrate cannot combine two | `merge` two declared fragments, then `close` ⇒ code `close-body-count`. Test: `crossing-operations.test-close-refuses-a-multi-body-fragment` |
 | `crossings` is ordered by IDENTITY, and identity is a hash — never index it positionally | a cell asserting `[base, derived]` order failed; the nodes came back hash-ordered. Key by `.import` instead. Test: `crossing-operations.test-crossing-node-records-both-derived-facts` |
+
+<!-- gen-citations:end -->
 
 ## Theory
 
