@@ -167,6 +167,22 @@ let
     ) srcs;
 
   violations = scan sources;
+
+  # The stripped code of one scanned file, by its repo-root-relative label. `lib.head` of an empty
+  # filter aborts, so a subject that has lost the file arrives as a red rather than as a silent [ ].
+  codeOf = name: (lib.head (lib.filter (s: s.name == name) sources)).code;
+
+  # A file's SIGNATURE is its first line of code — the parameters it can be applied to. Taken from
+  # the stripped text so the 21 lines of header above `arg-env.nix`'s signature do not stand in for
+  # it, and compared as a whole line rather than as an infix, because `{ ... }:` occurring SOMEWHERE
+  # in a file says nothing about what that file takes.
+  signatureOf =
+    name:
+    lib.head (
+      lib.filter (l: lib.stringLength (lib.replaceStrings [ " " ] [ "" ] l) > 0) (
+        lib.splitString "\n" (codeOf name)
+      )
+    );
 in
 {
   flake.tests.purity.test-library-source-is-nixpkgs-lib-free = {
@@ -185,6 +201,33 @@ in
       "ci/tests/_fixtures/purity-walk/nested/tethered.nix: 'lib.'"
       "ci/tests/_fixtures/purity-walk/surface.nix: 'mkOption'"
     ];
+  };
+
+  # ★ THE PREMISE THE `arg-env.nix` EXEMPTION RESTS ON, WRITTEN DOWN. The header argues that the one
+  # module-system-operating file cannot receive a nixpkgs `lib` at import — its file signature takes
+  # no parameters and its one call site passes none — and that is what makes relaxing `lib.` and
+  # `evalModules` for it safe rather than a hole. Until now the argument was held by a comment.
+  #
+  # The `{ lib }` / `{ lib,` bans do NOT close it, and the demonstration sits in this repository:
+  # nixfmt renders a multi-argument attribute set MULTI-LINE, so a signature changed to
+  # `{ lib, ... }:` and then formatted matches no contiguous `{ lib,` and passes every token cell
+  # here. A ban whose pattern the repo's own formatter dissolves is not a ban; the signature and the
+  # call site are therefore stated directly, as whole lines a reader can diff.
+  #
+  # Both halves ride in one expectation because they are one property: a signature that takes a lib
+  # with no caller passing one is dead, and a caller passing one to a signature that refuses it is a
+  # type error — it is the PAIR that makes the import boundary lib-free.
+  flake.tests.purity.test-arg-env-takes-no-lib-at-its-import-boundary = {
+    expr = {
+      signature = signatureOf "lib/arg-env.nix";
+      callSites = lib.filter (l: genPrelude.hasInfix "arg-env.nix" l) (
+        lib.splitString "\n" (codeOf "lib/default.nix")
+      );
+    };
+    expected = {
+      signature = "{ ... }:";
+      callSites = [ "  argEnvLib = import ./arg-env.nix { };" ];
+    };
   };
 
   # ★ THE PREMISE HOLDS OF THE TEXT THAT WAS ACTUALLY SCANNED. This is an absence claim over text
