@@ -30,6 +30,34 @@ let
     producerConfigs = { };
   };
 
+  # ★★★ ADR-0023 (b) SITE 1 — `applyContracts` — OFF-CROSSING BY THE ADAPTER
+  # SURFACE, LIVE THROUGH THE RETIRED DIRECT-CALL SURFACE (see gen-settings
+  # `lib/inject.nix`, write-list entry 7, for the one path that reaches it).
+  #
+  # (i) THIS SITE DOES NOT MEET ADR-0023 (c) THROUGH ANY SHIPPED ADAPTER: `contracts`
+  # has no Adapter position on `injectAdapter`, `mkSystemTerminal` or
+  # `mkFlakeTerminal` (crossing-adapter-set.nix's cfg-level-channel note: none of the
+  # three forwards a caller's `contracts`), and no value-shape route reaches it the
+  # way site 3's thunk sniff reaches `resolveThunks` — measured, O-4, two arms in one
+  # run: the retired direct-call surface (`contracts` passed BY NAME to `wrapCore` /
+  # `wrapAllCore`) fires the tripwire, rc=1; the SAME contract-shaped value crossed
+  # AS A VALUE through an Adapter returns verbatim, inert, rc=0, tripwire count 0.
+  #
+  # (ii) THE PRICE, STATED CONDITIONALLY BECAUSE THE ADAPTER ROUTE DOES NOT INCUR IT:
+  # were `contracts` ever given an Adapter position, a substrate closure — this
+  # function calling `contractLib.apply` — would execute inside the target's
+  # evaluation exactly as site 3's `resolveThunks` closure does, reading the bound
+  # value and its provenance and throwing whatever the contract's own predicate
+  # throws. Measured not incurred via any Adapter: O-4 above. It IS incurred through
+  # the retired direct-call surface, at whichever evaluation the caller's own module
+  # eventually joins — gen-settings `lib/inject.nix` is that live path.
+  #
+  # (iii) THE ARGUED IMPOSSIBILITY OF CLOSING IT BY CONSTRUCTION: there is no
+  # crossing route through an Adapter to close, so a by-construction repair is not
+  # available to this unit — there is nothing here for `den-hoag-i546n` to fix.
+  # Opening one (adding a `contracts` Adapter position) would be a reach widening,
+  # out of scope for a record that only prices what already exists.
+  #
   # Chitil 2012 §2: lazy contract application via genAttrs.
   # Contract thunks are shared across all modules when called from wrapAll.
   applyContracts =
@@ -103,6 +131,33 @@ let
           inherit mergeStrategies defaultMergeStrategy bindings;
         };
 
+        # ★★★ ADR-0023 (b) SITE 3 — the value-shape sniff below is a CROSSING-
+        # REACHABLE ROUTE, not discharged by construction (measured, gate v4 / O-1;
+        # falsifies the earlier premise that `thunkBindings`/`producerConfigs` being
+        # unoffered discharges this site).
+        #
+        # (i) THIS SITE DOES NOT MEET ADR-0023 (c). On the `thunkBindings == null`
+        # default — every shipped Adapter's default — this falls to a VALUE-SHAPE
+        # TEST on the crossed binding itself (`isList v && any (e: e ? __configThunk)
+        # v`) rather than a declared channel. A crossed value of that shape selects
+        # `resolveThunks` (`thunk.nix`), and `entry.__fn` — a caller-supplied closure
+        # — is applied INSIDE the target's fixpoint.
+        #
+        # (ii) THE PRICE: a substrate closure executes inside the target's
+        # evaluation. It reads `ctx` (the whole binding set passed to the wrapper)
+        # and `producerConfigs`, and it can throw anything `entry.__fn` throws,
+        # evaluated at the target's own recursion depth rather than the substrate's.
+        # O-1 measures the ground in one run: `armThunk` (a `__configThunk`-shaped
+        # value) rc=1, tripwire fired; `armPlain` (an ordinary attrset) rc=0, the
+        # in-run control, value returned verbatim.
+        #
+        # (iii) THE ARGUED IMPOSSIBILITY: closing this by construction would mean
+        # replacing the value-shape sniff with a typed Adapter channel for thunks —
+        # a `ThunkBindings` position threaded the way `bindArgEnv` is — which would
+        # have to change the Adapter TYPE itself (`crossing-adapter.nix`), not this
+        # file, and is out of scope for this unit: it is a crossing re-derivation
+        # question, routed to `den-hoag-i546n`, not a declared-opt-out record.
+        #
         # Per-key thunk decision — the same predicate the eager detection used,
         # asked one key at a time so it forces only the key being demanded.
         isThunkArg =

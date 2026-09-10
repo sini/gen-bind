@@ -28,6 +28,26 @@ in
       ) bindings;
   };
 
+  # ★★★ ADR-0023 (b) — POINTER DECLARATION, PARITY WITH `thunk.nix`'s. The full
+  # four-part declaration for the crossing route this validator gets carried
+  # into lives at gen-bind `crossing-adapter-set.nix`'s `mkSystemTerminal`
+  # collision-class header (write-list entry 1, SITE 2) — that is the SPLICING
+  # POINT, where `bindFormals` returns `.all` (`mods ++ vals`) and this
+  # validator lands in the target's own module set.
+  #
+  # (i) THIS VALIDATOR DOES NOT MEET ADR-0023 (c) once spliced: it is a
+  # substrate-built lambda placed into a foreign module set.
+  # (ii) THE PRICE, stated here as it is stated at the splicing point: a
+  # substrate closure — this function — executes inside the target's
+  # evaluation whenever a bound name collides with a module-system arg,
+  # reading `provenance` and the resolved policy, and it throws on a
+  # `_mergeStrategy = "error"` opt-in.
+  # (iii) THE ARGUED IMPOSSIBILITY is `crossing-adapter-set.nix`'s: closing this
+  # would have to move collision detection substrate-side, before any target
+  # module set exists, which is out of scope for this record. See
+  # `crossing-adapter-set.nix`'s SITE-2 declaration for the full argument and
+  # O-3's measured ground.
+  #
   # Academic: Findler 2002 §2.2 — blame assignment at collision detection.
   mkMergeValidator =
     {

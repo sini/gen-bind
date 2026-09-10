@@ -97,6 +97,30 @@ in
   #
   # Laziness: `gate`, `module`, and `adapt` are forced only when the returned function is
   # applied by `evalModules`.
+  # ★★★ ADR-0023 (b) SITE 4 — `configGate` — OFF-CROSSING, UNREACHED.
+  #
+  # (i) THIS SITE DOES NOT MEET, AND DOES NOT NEED TO: `configGate` evaluates the
+  # caller-supplied `adapt` closure inside the nested `crossEval` fixpoint it
+  # builds — mechanically the same shape as site 3's closure execution — but no
+  # shipped Adapter offers a `bindArgEnv` position for it to be reached through:
+  # `injectAdapter`, `mkSystemTerminal` and `mkFlakeTerminal` all set
+  # `bindArgEnv = null` (crossing-adapter-set.nix), and no `lib/` binding in this
+  # repo calls `configGate` at all — measured, a repo-wide search for callers
+  # returns none. It is exported and reachable only by a CALLER building a
+  # terminal module directly, off every Adapter.
+  #
+  # (ii) THE PRICE, STATED CONDITIONALLY BECAUSE IT IS NOT INCURRED THROUGH ANY
+  # ADAPTER: were `bindArgEnv` ever wired to this function by an Adapter, a
+  # substrate closure — the caller's `adapt`/`gate` pair — would execute inside
+  # the target's evaluation (here, inside the nested `crossEval` this function
+  # builds), reading whatever `args` the crossing terminal supplies and able to
+  # throw anything `adapt`/`gate` throw.
+  #
+  # (iii) THE ARGUED IMPOSSIBILITY OF NEEDING ONE: there is no crossing route
+  # through an Adapter to close, so a by-construction repair is not available to
+  # this unit — there is nothing here for `den-hoag-i546n` to fix. Wiring
+  # `bindArgEnv` to this function on some future Adapter is a reach widening,
+  # out of scope for a record that only prices what already exists.
   configGate =
     {
       gate,

@@ -46,6 +46,27 @@
   # consumer, on demand — no eager force at wrap time. A genuine cross-terminal
   # cycle (the producer config transitively demands this same thunk) surfaces as
   # Nix's own LOUD `infinite recursion encountered`, never a silent stale read.
+  # ★★★ ADR-0023 (b) — POINTER DECLARATION, NOT THE CROSSING'S DECLARATION OF
+  # RECORD. The full four-part declaration for the crossing route THIS function
+  # executes lives at `wrap.nix`'s `isThunkArg` (write-list entry 3, gen-bind
+  # `crossing-adapter-set.nix`'s SITE-2 sibling in structure): that is the SITE-3
+  # SELECTION POINT — the value-shape sniff that decides whether a crossed
+  # binding routes here at all — and the declaration belongs there for parity
+  # with SITE 2's own selection point (`mkMergeValidator` is priced at
+  # `crossing-adapter-set.nix`, not at `merge-strategy.nix`; see that file's
+  # pointer).
+  #
+  # (i) THIS FUNCTION DOES NOT MEET ADR-0023 (c) when `isThunkArg` selects it:
+  # `entry.__fn` — a caller-supplied closure — is applied here, inside whatever
+  # fixpoint `config`/`targetConfig` belongs to.
+  # (ii) THE PRICE, stated here as it is stated at the selection point: a
+  # substrate closure executes inside the target's evaluation, reading `ctx`,
+  # `producerConfigs` and the resolved `targetConfig`, and it can throw anything
+  # `entry.__fn` throws.
+  # (iii) THE ARGUED IMPOSSIBILITY is `wrap.nix`'s: closing this would have to change
+  # the Adapter TYPE to carry a typed thunk channel, which is out of scope for
+  # this record. See `wrap.nix`'s `isThunkArg` for the full argument and O-1's
+  # measured ground.
   resolveThunks =
     {
       config,

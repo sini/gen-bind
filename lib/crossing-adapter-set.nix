@@ -159,6 +159,29 @@ let
   # true of every NixOS-shaped target, and the same imposition the retired
   # surface made.
   #
+  # ★★★ ADR-0023 (b) SITE 2 — GAINING THE PRICE ADR-0023 ACTUALLY ASKS FOR.
+  # THE `warnings` SENTENCE ABOVE PRICES A DIFFERENT IMPOSITION; measured, the
+  # closure-price predicate read 0 occurrences at every declaration surface in
+  # the ecosystem while the comparison record that coined the phrase reads 4 —
+  # naming a different imposition does not discharge this one.
+  #
+  # (i) THIS SITE DOES NOT MEET ADR-0023 (c) EITHER.
+  #
+  # (ii) THE PRICE, IN THE SITE'S OWN TERMS: a substrate closure — the validator
+  # `mkMergeValidator` builds (`merge-strategy.nix`) — executes inside the target's
+  # evaluation whenever a bound name collides with a module-system arg, reading
+  # `provenance` and the resolved collision policy, and it throws on a
+  # `_mergeStrategy = "error"` opt-in (O-3 measures the ground: the validator is
+  # spliced into the target's module set at length 2, kinds
+  # `[ "attrs" "FUNCTION" ]`; the trailing lambda names itself `mkMergeValidator`).
+  #
+  # (iii) THE ARGUED IMPOSSIBILITY: a by-construction fix would mean detecting the
+  # collision substrate-side, before any target module set exists — not available
+  # to this unit, because the module system a crossed binding can collide with is
+  # the TARGET's, unknown until the target's own modules are collected. Closing
+  # this here would have to change WHERE collision detection runs, not merely how
+  # this validator prices it, which is out of scope for a declared-opt-out record.
+  #
   # ★★ AND THE cfg-LEVEL CHANNEL, WHICH IS NOT A RESIDUE BUT A RETIREMENT.
   # The retired `terminalBind` surface accepted a call-level cfg and forwarded
   # it whole into `wrapAllCore` — `contracts`, `provenance`, `mergeStrategies`,
@@ -188,6 +211,52 @@ let
           # `Adapter.bindFormals`. `.all` = the wrapped modules plus the
           # merge-collision validators — the collision class's named surface
           # (see the header block above).
+          #
+          # ★★★ ADR-0023 (b) SITE 6 — THE WRAPPING PLACEMENT ITSELF IS A
+          # CROSSING, ON THE PARTIAL-APPLICATION BRANCH ONLY.
+          #
+          # (i) THIS SITE DOES NOT MEET ADR-0023 (c). `wrapAllCore`'s
+          # partial-application branch (`wrap.nix`, `wrapFunctionModule`) places
+          # `setFunctionArgs wrapper remainingArgs` — a SUBSTRATE-AUTHORED
+          # `__functor` attrset carrying `__functionArgs` whose advertised formals
+          # OMIT the bound name — into the target's module set, which then CALLS
+          # it. The consumer handed a bare lambda; what crosses under
+          # `bindFormals` is not it. Measured (O-2): stock head keys
+          # `[ "__functionArgs" "__functor" ]`, advertising `[ "other" ]` with `x`
+          # stripped; the discriminating predicate is AUTHORSHIP, not
+          # `anyFunction`, which reads `true` on every function-shaped consumer
+          # regardless and cannot discriminate (rejected, §2.7).
+          #
+          # ★ SCOPED TO ONE OF THREE PLACEMENT BRANCHES, NOT EVERY FUNCTION-SHAPED
+          # MODULE. A consumer whose class module binds every formal
+          # (`allMatched == true`) is CALLED and its own returned attrset is
+          # placed (`wrap.nix`, head keys `[ "config" ]`, no substrate
+          # authorship); a consumer with no formal bound at all is placed
+          # unchanged (passthrough). The price below is owed only on the
+          # partial-application branch; charging every function-shaped module
+          # would overclaim two branches this site never touches.
+          #
+          # (ii) THE PRICE: a substrate closure — the `wrapper` `wrap.nix` builds
+          # — executes inside the target's evaluation every time the target's
+          # module system calls it, reading `moduleCallArgs` (whatever the
+          # target's own evaluation supplies at that position) and the bound
+          # `bindings`, and it can throw anything the wrapped consumer module
+          # throws, plus `evalModules`'s own arity errors if the target calls it
+          # with the wrong shape.
+          #
+          # (iii) THE ARGUED IMPOSSIBILITY: `injectAdapter` above shows an
+          # alternative placement exists — an arg-environment writer
+          # (`_module.args`) rather than a formal partial application — but
+          # substituting it is NOT a (c)-preserving repair here: it is a REACH
+          # WIDENING, measured (O-INJ-3): a module the substrate never saw,
+          # reached only by a target-side `imports` from one it did see, FAILS
+          # under stock formal partial application (`attribute 'x' missing`) and
+          # READS THE BINDING under the seeded `_module.args` placement — the
+          # substitution widens every binding's reach to modules never inspected.
+          # Whether ADR-0023 (c) admits an Adapter that binds by PARTIAL
+          # APPLICATION AT ALL is what would have to change, and that question is
+          # out of scope for this record — it is `den-hoag-i546n`'s open question
+          # (§4.2), not picked here.
           bindFormals =
             values: body:
             (wrapLib.wrapAllCore {

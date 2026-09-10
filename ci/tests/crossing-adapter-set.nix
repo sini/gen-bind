@@ -497,6 +497,109 @@ let
       };
     }
   );
+
+  # ── ADR-0023 (b) write-list entry 8 — O-1 · O-2 · O-3's permanent grounds ────
+  #
+  # These three cells keep each opt-out declaration's GROUND measured, so a
+  # declaration cannot outlive the fact it prices (spec §3 preamble). Built
+  # DIRECTLY against `mkSystemTerminal(...).adapter{...}.bindFormals` — one
+  # level under the `pipeline`/`close` congruence machinery the cells above
+  # exercise — because that is the altitude at which sites 2, 3 and 6 actually
+  # execute; the value never visits `placement`'s Time/Channel decision on this
+  # path (site 5 already covers that altitude, above).
+  optoutSystemAdapter =
+    (mkSystemTerminal {
+      evaluator = { modules, specialArgs }: lib.evalModules { inherit modules specialArgs; };
+      locateConfig = c: c;
+    }).adapter
+      {
+        extent = { };
+        extraModules = [ ];
+      };
+
+  # ══ O-1 — SITE 3's GROUND: the value-shape thunk sniff (`wrap.nix`'s
+  # `isThunkArg`) routes a caller-supplied closure into the target's OWN
+  # evaluation. Two arms over the SAME adapter and the SAME `bindFormals`
+  # call, differing only in the SHAPE of one crossed binding value.
+  optoutO1Body = [
+    (
+      { x, ... }:
+      {
+        options.probeOut = lib.mkOption {
+          type = lib.types.raw;
+          default = null;
+        };
+        # Site 2's price, paid here too: the spliced merge-collision validator
+        # DEFINES `warnings`, so the target must declare the option.
+        options.warnings = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+        };
+        config.probeOut = x;
+      }
+    )
+  ];
+
+  optoutO1 =
+    values:
+    (optoutSystemAdapter.wrapUnit (optoutSystemAdapter.bindFormals values optoutO1Body) [ ])
+    .config.probeOut;
+
+  # ══ O-2 — SITE 6's GROUND: the placed head is a SUBSTRATE-AUTHORED functor.
+  # The consumer hands a bare lambda; `wrapAllCore`'s partial-application
+  # branch places `setFunctionArgs wrapper remainingArgs` instead — an attrset
+  # carrying `__functor` and `__functionArgs` whose advertised formals OMIT
+  # the bound name. `anyFunction` cannot discriminate this (rejected, §2.7):
+  # it reads `true` on a function-shaped consumer regardless of authorship.
+  optoutO2ConsumerModule =
+    { x, other, ... }:
+    {
+      config.probeMark = "fn";
+    };
+
+  optoutO2Placed = builtins.head (
+    optoutSystemAdapter.bindFormals { x = 1; } [ optoutO2ConsumerModule ]
+  );
+
+  # ══ O-3 — SITE 2's GROUND: the merge-collision validator is SPLICED into
+  # the target's own module set. `bindFormals` returns `.all` (`mods ++
+  # vals`, `wrap.nix`), so a FUNCTION-shaped Body places length 2 — the
+  # wrapped head plus a trailing validator lambda — while an attrset-shaped
+  # Body (the in-run control) places neither wrapper nor validator.
+  optoutO3Kinds = builtins.map (
+    m:
+    if builtins.isFunction m then
+      "FUNCTION"
+    else if builtins.isAttrs m then
+      "attrs"
+    else
+      "other"
+  );
+
+  optoutO3AttrsBody = [ { config.probeMark = "plain"; } ];
+
+  optoutO3PlacedFn = optoutSystemAdapter.bindFormals {
+    x = 1;
+    y = "s";
+  } [ optoutO2ConsumerModule ];
+  optoutO3PlacedAttrs = optoutSystemAdapter.bindFormals {
+    x = 1;
+    y = "s";
+  } optoutO3AttrsBody;
+
+  # The trailing entry, applied — behavioural identification of `mkMergeValidator`.
+  # (Nix's own debug trace names it `lambda mkMergeValidator @ merge-strategy.nix:…`
+  # when you pass it where an attrset is expected, but that text lives on
+  # stderr and is not a value `expr`/`expected` can compare; the collision
+  # warning it emits IS such a value.)
+  optoutO3TrailingCollisionWarnings = (builtins.elemAt optoutO3PlacedFn 1) {
+    config._module.args = {
+      x = "shadowing-value";
+    };
+  };
+  optoutO3TrailingNoCollisionWarnings = (builtins.elemAt optoutO3PlacedFn 1) {
+    config._module.args = { };
+  };
 in
 {
   # ══ O-REF-1 — the containment refusal, unqualified, THROUGH `close` ══════════
@@ -1202,5 +1305,122 @@ in
   flake.tests.crossing-adapter-set.test-o-trm-4-a-terminal-with-no-evaluated-config-says-so-visibly = {
     expr = flakeTerminal.locateConfig;
     expected = null;
+  };
+
+  # ══ ADR-0023 (b) write-list entry 8 — O-1, O-2, O-3's permanent cells ═══════
+  #
+  # Each keeps the GROUND of one declaration measured, so the declaration
+  # cannot outlive the fact it prices (spec §3 preamble). A miss here is a
+  # STOP for the declaration at `crossing-adapter-set.nix` / `wrap.nix`, not a
+  # cell to relax.
+
+  # ── O-1 · site 3 (`wrap.nix`'s `isThunkArg`) ─────────────────────────────────
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: `isThunkArg` stops selecting on value
+  # shape (the seeded defect is `isThunkArg = _: false`) and the tripwire
+  # closure is never called — forcing `armThunk` then SUCCEEDS instead of
+  # throwing, reading identically to `armPlain`, the in-run control, and the
+  # two arms no longer discriminate.
+  flake.tests.crossing-adapter-set.test-optout-o1-site-3-thunk-shape-crosses-a-caller-closure = {
+    expr =
+      (builtins.tryEval (
+        builtins.deepSeq (optoutO1 {
+          x = [
+            {
+              __configThunk = true;
+              __fn = _args: throw "O-1 tripwire: a substrate closure executed inside the target's evaluation";
+            }
+          ];
+        }) true
+      )).success;
+    expected = false;
+  };
+
+  flake.tests.crossing-adapter-set.test-control-optout-o1-a-plain-list-value-crosses-untouched = {
+    expr = optoutO1 {
+      x = [ { notAThunk = true; } ];
+    };
+    expected = [ { notAThunk = true; } ];
+  };
+
+  # ── O-2 · site 6 (`wrapAllCore`'s partial-application branch) ───────────────
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: `bindFormals` places the consumer's own
+  # module (or an arg-environment wrapper) without a substrate-authored
+  # `__functor` wrapping it — `placed-is-substrate-authored-functor` reads
+  # `false`, head keys read `[ "_module" "imports" ]`, and `__functionArgs`
+  # is absent entirely.
+  flake.tests.crossing-adapter-set.test-optout-o2-site-6-placed-head-is-a-substrate-authored-functor = {
+    expr = {
+      isSubstrateAuthoredFunctor =
+        builtins.isAttrs optoutO2Placed && optoutO2Placed ? __functor && optoutO2Placed ? __functionArgs;
+      advertisedFormalsOmitBoundName = !(optoutO2Placed.__functionArgs ? x);
+      advertisedFormalsKeepUnbound = optoutO2Placed.__functionArgs ? other;
+    };
+    expected = {
+      isSubstrateAuthoredFunctor = true;
+      advertisedFormalsOmitBoundName = true;
+      advertisedFormalsKeepUnbound = true;
+    };
+  };
+
+  # ★ THE CONTROL: the consumer's OWN module is a bare lambda, no convention
+  #   keys — without it the cell above cannot tell "substrate wrapped it" from
+  #   "the consumer already looked like this".
+  flake.tests.crossing-adapter-set.test-control-optout-o2-the-consumers-own-module-is-a-bare-lambda = {
+    expr = builtins.isFunction optoutO2ConsumerModule && !(builtins.isAttrs optoutO2ConsumerModule);
+    expected = true;
+  };
+
+  # ── O-3 · site 2 (the validator spliced into the target's module set) ───────
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: `bindFormals` returns `mods` alone (the
+  # seeded defect is `all = mods`, dropping `vals`) and a FUNCTION-shaped Body
+  # places length 1, kinds `[ "attrs" ]` — indistinguishable from the
+  # attrset-shaped control below.
+  flake.tests.crossing-adapter-set.test-optout-o3-site-2-the-validator-is-spliced-into-the-targets-module-set = {
+    expr = {
+      length = builtins.length optoutO3PlacedFn;
+      kinds = optoutO3Kinds optoutO3PlacedFn;
+    };
+    expected = {
+      length = 2;
+      kinds = [
+        "attrs"
+        "FUNCTION"
+      ];
+    };
+  };
+
+  # ★ THE TRAILING ENTRY, IDENTIFIED BEHAVIOURALLY. Nix's own debug trace
+  #   names it `lambda mkMergeValidator @ merge-strategy.nix:…` when it is
+  #   passed where an attrset is expected, but that text is stderr, not a
+  #   value `expr`/`expected` can compare — the collision warning it emits IS
+  #   such a value, and it is what `merge-strategy.nix`'s own declaration
+  #   prices as the closure that "executes inside the target's evaluation …
+  #   and throws on a `_mergeStrategy = "error"` opt-in".
+  flake.tests.crossing-adapter-set.test-optout-o3-the-trailing-entry-is-the-merge-collision-validator = {
+    expr = {
+      collisionWarningFires = optoutO3TrailingCollisionWarnings.warnings != [ ];
+      noCollisionIsSilent = optoutO3TrailingNoCollisionWarnings.warnings == [ ];
+    };
+    expected = {
+      collisionWarningFires = true;
+      noCollisionIsSilent = true;
+    };
+  };
+
+  # ★ THE CONTROL, SAME INSTRUMENT SAME RUN: an attrset-shaped Body places
+  #   neither wrapper nor validator, so the length-2 reading above is not an
+  #   artefact of the harness.
+  flake.tests.crossing-adapter-set.test-control-optout-o3-an-attrset-body-places-neither-wrapper-nor-validator = {
+    expr = {
+      length = builtins.length optoutO3PlacedAttrs;
+      kinds = optoutO3Kinds optoutO3PlacedAttrs;
+    };
+    expected = {
+      length = 1;
+      kinds = [ "attrs" ];
+    };
   };
 }
