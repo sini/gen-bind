@@ -1,5 +1,7 @@
 # gen-bind — agent capability sheet
 
+> **Library class: reference-grade.** Deletion requires a domain argument — wrong abstraction, subsumption by another construct, or theory-unsoundness; a usage count is inadmissible as a deletion ground (P7, 2026-08-17).
+
 ## Scope
 
 Partial application of external bindings into Nix module functions: inspects a module's formal parameters (`builtins.functionArgs`), injects matching bindings, and re-advertises the residual interface in the nixpkgs `__functionArgs`/`_file` convention — plus three primitives that rewrite the arg environment *at* an `evalModules` crossing, plus the **boundary crossing** surface (`genBind.crossing`): the crossing node, its derived demand relation over a closed first-order body-term algebra, first-order contracts checked substrate-side, the Adapter, the fleet Linkset, and the six operations `declare`/`merge`/`gate`/`link`/`close`/`residue`.
