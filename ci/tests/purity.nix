@@ -117,6 +117,16 @@ let
 
   sources = strip rawSources;
 
+  # The live counterpart to `forbidden`: the name this library reaches for where a tether would reach
+  # for nixpkgs. Every gen-bind source but FIVE carries it, and all five exclusions are modules whose
+  # file signature is `{ ... }:` — they bind no formal at all and so name no substrate, which is why
+  # their text cannot carry this token. Those exclusions are what give the assertion its teeth: the
+  # expected list is a PROPER SUBSET of the manifest, so a read returning one fixed text for every
+  # file lands outside it either way — without the token the list collapses toward empty, with it the
+  # list swells to every source.
+  liveToken = "prelude";
+  liveReads = map (src: src.name) (lib.filter (src: genPrelude.hasInfix liveToken src.code) sources);
+
   # Tokens that signal a nixpkgs-lib tether or the module-system (Korora-class) tier.
   forbidden = [
     "nixpkgs" # a nixpkgs flake input / reference
@@ -189,6 +199,75 @@ in
     expr = violations;
     expected = [ ];
   };
+  # What the cell above is a statement ABOUT. Its `[ ]` is produced just as readily by a scan that
+  # reads the wrong tree, or no tree, as by a library that is clean, and neither the detector cells
+  # below nor a guard on the source list's SIZE can tell those apart — the first never touch
+  # `sources`, and the second answers a question about how many rather than which. Disconnection is
+  # an IDENTITY defect: a scan that had dropped the whole library tree and kept only the two root
+  # entries is non-empty, has non-empty content, and reports the invariant clean over a set
+  # containing none of the library. So membership is written down as the label list itself. Asserting
+  # the list also makes a new library file arrive as a RED rather than being absorbed silently, which
+  # is the point — the scope of an invariant is a declared surface, not a default.
+  flake.tests.purity.test-scan-subject-is-the-library-tree = {
+    expr = map (s: s.name) sources;
+    expected = [
+      "lib/arg-env.nix"
+      "lib/compose.nix"
+      "lib/contract.nix"
+      "lib/crossing-adapter-set.nix"
+      "lib/crossing-adapter.nix"
+      "lib/crossing-binding.nix"
+      "lib/crossing-contract.nix"
+      "lib/crossing-delta.nix"
+      "lib/crossing-linkset.nix"
+      "lib/crossing-refusal.nix"
+      "lib/crossing-term.nix"
+      "lib/crossing.nix"
+      "lib/default.nix"
+      "lib/identity.nix"
+      "lib/merge-strategy.nix"
+      "lib/module-convention.nix"
+      "lib/provenance.nix"
+      "lib/signature.nix"
+      "lib/strip.nix"
+      "lib/thunk.nix"
+      "lib/wrap.nix"
+      "flake.nix"
+      "default.nix"
+    ];
+  };
+
+  # And that those labels carry their files' text. The manifest above pins membership and is silent
+  # on content: a read that handed every entry one fixed string would satisfy it exactly, and a live
+  # `lib.types.str` sitting in a real library file would pass through all of the other cells here at
+  # exit 0. This is the same shape as the manifest — an exact list, not a count — asked of a token
+  # that is genuinely present rather than genuinely absent, so the reads are shown to carry this
+  # repository's source and not a constant. `codeOf` pins the text of one file by aborting when it
+  # goes missing; this pins the text of every file that names the substrate.
+  flake.tests.purity.test-scan-reads-are-live = {
+    expr = liveReads;
+    expected = [
+      "lib/contract.nix"
+      "lib/crossing-adapter-set.nix"
+      "lib/crossing-adapter.nix"
+      "lib/crossing-binding.nix"
+      "lib/crossing-contract.nix"
+      "lib/crossing-delta.nix"
+      "lib/crossing-linkset.nix"
+      "lib/crossing-refusal.nix"
+      "lib/crossing-term.nix"
+      "lib/crossing.nix"
+      "lib/default.nix"
+      "lib/merge-strategy.nix"
+      "lib/provenance.nix"
+      "lib/signature.nix"
+      "lib/thunk.nix"
+      "lib/wrap.nix"
+      "flake.nix"
+      "default.nix"
+    ];
+  };
+
   # THE WALK DESCENDS, AND CARRIES ITS PREFIX. lib/ is flat today, so the invariant cell exercises
   # the recursive branch not at all and would keep passing if the walk quietly flattened — which is
   # precisely the state this replaced. The fixture tree is nested on purpose and carries a planted
