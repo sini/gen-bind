@@ -64,9 +64,9 @@
   # `producerConfigs` and the resolved `targetConfig`, and it can throw anything
   # `entry.__fn` throws.
   # (iii) THE ARGUED IMPOSSIBILITY is `wrap.nix`'s: closing this would have to change
-  # the Adapter TYPE to carry a typed thunk channel, which is out of scope for
-  # this record. See `wrap.nix`'s `isThunkArg` for the full argument and O-1's
-  # measured ground.
+  # the Adapter TYPE to carry a typed thunk channel — SITE-3's argued
+  # impossibility under ADR-0013, not a scope limit on either record. See
+  # `wrap.nix`'s `isThunkArg` for the full argument and O-1's measured ground.
   resolveThunks =
     {
       config,

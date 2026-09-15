@@ -44,9 +44,9 @@ in
   # `_mergeStrategy = "error"` opt-in.
   # (iii) THE ARGUED IMPOSSIBILITY is `crossing-adapter-set.nix`'s: closing this
   # would have to move collision detection substrate-side, before any target
-  # module set exists, which is out of scope for this record. See
-  # `crossing-adapter-set.nix`'s SITE-2 declaration for the full argument and
-  # O-3's measured ground.
+  # module set exists — SITE-2's argued impossibility under ADR-0013, not a
+  # scope limit on either record. See `crossing-adapter-set.nix`'s SITE-2
+  # declaration for the full argument and O-3's measured ground.
   #
   # Academic: Findler 2002 §2.2 — blame assignment at collision detection.
   mkMergeValidator =

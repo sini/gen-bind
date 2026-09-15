@@ -155,8 +155,9 @@ let
         # replacing the value-shape sniff with a typed Adapter channel for thunks —
         # a `ThunkBindings` position threaded the way `bindArgEnv` is — which would
         # have to change the Adapter TYPE itself (`crossing-adapter.nix`), not this
-        # file, and is out of scope for this unit: it is a crossing re-derivation
-        # question, routed to `den-hoag-i546n`, not a declared-opt-out record.
+        # file — the argued impossibility this declaration records under ADR-0013,
+        # not a scope limit on the record itself. Closing it is a crossing
+        # re-derivation question, carried by `den-hoag-i546n`.
         #
         # Per-key thunk decision — the same predicate the eager detection used,
         # asked one key at a time so it forces only the key being demanded.
