@@ -29,7 +29,7 @@ Quoted text is the owner's own `flake.nix` `description` field, verbatim.
 
 ## Exports
 
-Entry: `inputs.gen-bind.lib` (flake). Root `default.nix` is a FUNCTION `{ prelude ? <derived from flake.lock>, ... } -> lib`; `import ./lib` is `{ prelude } -> lib` with `prelude` required. The flake output and the zero-arg `import ./gen-bind { }` yield the same value.
+Entry: `inputs.gen-bind.lib` (flake). Root `default.nix` is a **function** — `import ./gen-bind { }` — whose one named parameter, `prelude`, defaults to the `ci/flake.lock` pin and may be overridden. A second formal on that same root, `wire ? { deps, resolve }: import ./lib deps`, is the seam that hands this exact parameter set to `./lib` as `deps`, and the shim's only outward channel besides: a formal is an INPUT channel and cannot carry a value out, so the lock-parameterised `follows` resolver rides out on the same record. Overriding `wire` is how a cell reads the shim's own formal-to-path map AND its own resolver, with nothing fetched and no fold transcribed. There is no `...`: an argument this root does not declare is a loud error, not a silent drop. The flake output and `import ./gen-bind { }` yield the same value.
 
 **Wrapping** — `lib/wrap.nix`
 
