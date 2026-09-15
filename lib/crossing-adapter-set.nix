@@ -180,7 +180,8 @@ let
   # to this unit, because the module system a crossed binding can collide with is
   # the TARGET's, unknown until the target's own modules are collected. Closing
   # this here would have to change WHERE collision detection runs, not merely how
-  # this validator prices it, which is out of scope for a declared-opt-out record.
+  # this validator prices it — the argued impossibility this declaration records
+  # under ADR-0013, not a scope limit on the record itself.
   #
   # ★★ AND THE cfg-LEVEL CHANNEL, WHICH IS NOT A RESIDUE BUT A RETIREMENT.
   # The retired `terminalBind` surface accepted a call-level cfg and forwarded
