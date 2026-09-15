@@ -813,7 +813,8 @@ invariant. A gate that skips a file is worse than no gate, because it reads as a
 
 ## Testing
 
-**352 tests across 22 suites** — `arg-env`, `compose`, `contract`, `crossing-adapter`,
+**392 tests across 22 suites** (`nix-unit --flake ./ci#tests` ⇒ `392/392 successful`, `a7c55d9`) —
+`arg-env`, `compose`, `contract`, `crossing-adapter`,
 `crossing-adapter-set`, `crossing-contract`, `crossing-delta`, `crossing-linkset`,
 `crossing-operations`, `crossing-populations`, `crossing-term`, `entry`,
 `evalmodules-equivalence`, `identity`, `integration`, `merge-strategy`, `provenance`, `purity`,
@@ -823,7 +824,7 @@ driven by the production-safety equivalence gate and the `arg-env` crossing suit
 
 ```bash
 cd ci
-nix run nixpkgs#nix-unit -- --flake .#tests            # all 352, across 22 suites
+nix run nixpkgs#nix-unit -- --flake .#tests            # all 392, across 22 suites
 nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
 nix flake check                                        # full check incl. treefmt
 ```
