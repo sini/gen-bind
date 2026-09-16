@@ -30,7 +30,11 @@
 # second. `locateConfig = null` says "this terminal produces no evaluated config"
 # visibly, the same way the Adapter's `Maybe` fields say a position is not
 # offered.
-{ prelude, interpret }:
+{
+  prelude,
+  interpret,
+  graph,
+}:
 let
   wrapLib = import ./wrap.nix { inherit prelude; };
 
@@ -136,13 +140,26 @@ let
   # and `E(u)` cannot count them. Two of the three are scope residues —
   # `extraModules` is target-owned content the substrate never inspects, and
   # `evaluator`/`passthrough` carry no reach of their own. `extent` IS a
-  # correctness residue and it is SILENT: it is the realized peer set, so a missed edge to a
-  # peer leaves the value correct and makes `E(u)` under-report, which can render
-  # `linked(u)` wrongly true. It stays a raw attrset accessor OUTSIDE the
-  # governed query surface — no mark, no narrowing, widening trivially
-  # expressible. An ADR-0026-compatible SHAPE for peer access is commissioned
-  # elsewhere and UNDELIVERED; this construction does not deliver it, and a
-  # reading of this file that takes the move as discharging it has overclaimed.
+  # correctness residue: it is the realized peer set, so a missed edge to a
+  # peer would leave the value correct and make `E(u)` under-report, which
+  # could render `linked(u)` wrongly true. **THAT RESIDUE IS NO LONGER
+  # SILENT** (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2, Q5
+  # Arm A, delivered below). `adapter` bounds `extent` through
+  # `gen-graph.boundedBy peerGraph marksOf` before it ever reaches
+  # `specialArgs.nodes`: the target is handed the admitted-key restriction,
+  # never the whole class, and a withheld peer is named, with the mark that
+  # withheld it, in the adapter's own `peerRelation` field — a constructed,
+  # tagged carrier element (`__element = "peerRelation"`), reachable
+  # substrate-side off the returned Adapter record. `extent` stays a raw
+  # attrset accessor OUTSIDE the governed query surface in one sense only:
+  # this is Q5 ARM A, BOUND not PLACED. A closure-borne carriage is still not
+  # a `Termed` `Binding`, so δ (`crossing-delta.nix`, binding `outEdges`)
+  # still cannot see it and `E(u)` still cannot count it as a demand edge —
+  # that re-expression is ADR-0030's own named pending destination
+  # (Scope-and-consequences: "instance args closed over in a `let`" / "terminal
+  # reads through the final eval" stay legal pending it), not this
+  # construction's. `extent` stays a correctness residue; only its silence is
+  # discharged.
   #
   # ★★ AND THE COLLISION CLASS, WHICH IS NAMED RATHER THAN REFUSED. A crossed
   # binding shadowing a value the target's module system supplies for the same
@@ -212,7 +229,11 @@ let
   # shut for the five that remain; an execution authorization is not a
   # convenience member, and this is why it alone was reopened.
   mkSystemTerminal =
-    { evaluator, locateConfig }:
+    {
+      evaluator,
+      locateConfig,
+      class,
+    }:
     {
       inherit locateConfig;
 
@@ -220,6 +241,9 @@ let
         {
           extent,
           extraModules,
+          peerGraph,
+          marksOf,
+          readerId,
           ...
         }@carriage:
         let
@@ -240,21 +264,67 @@ let
           # warning — against ADR-0025 item 1. Named by name, matching the
           # `passthrough ? nodes` throw below; over the KEY SET only, forcing
           # nothing the adapter does not already force.
+          #
+          # `peerGraph`, `marksOf` and `readerId` joined this set as REQUIRED,
+          # never-defaulted members (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md
+          # §4.4, Q4 RULED: "the marks accessor is a required argument, never
+          # defaulted"). They are pattern-matched above with no `?` default,
+          # so Nix's own "called without required argument" refuses a missing
+          # one at the call — the same total, visible posture `extent` and
+          # `extraModules` already had. `peerGraph` is Q3-generic by
+          # construction: this file never builds one (§4.3 Q3 stays a fork,
+          # unpicked here) — it only consumes whatever `gen-graph.labeledFrom`-
+          # shaped `labeledGraph` value the caller hands it.
           knownCarriageMembers = [
             "extent"
             "extraModules"
             "passthrough"
             "thunkBindings"
+            "peerGraph"
+            "marksOf"
+            "readerId"
           ];
           unknownCarriageMembers = builtins.filter (k: !(builtins.elem k knownCarriageMembers)) (
             builtins.attrNames carriage
           );
+
+          # ── the peer-relation bound (Q5 Arm A) ──────────────────────────
+          # `gen-graph.boundedBy` IS ADR-0026's mechanism, already shipped —
+          # reused, not reconstructed (spec §2.2). `bounded.nodes` is NOT the
+          # bound (it inherits `peerGraph`'s node set UNCHANGED, §2.1) — the
+          # bound is the admitted-key restriction of `extent`, built from
+          # `forgetLabels bounded .edges readerId`, gen-graph's own dedup
+          # projection reused rather than re-`unique`d here.
+          bounded = graph.boundedBy peerGraph marksOf;
+          admitted = (graph.forgetLabels bounded).edges readerId;
+          admittedExtent = builtins.listToAttrs (
+            map (k: {
+              name = k;
+              value = extent.${k};
+            }) admitted
+          );
+
+          # The constructed, tagged carrier element ADR-0012 ruling 2 requires
+          # (a name AND a defining query — spec §2.1): `__element` is the tag
+          # `elementOf` checks (`gen-view/lib/carrier.nix`), never an
+          # attribute-name match, so a plain attrset with the right keys is
+          # not accepted for it. Reachable SUBSTRATE-side, off the Adapter
+          # record `mkSystemTerminal(...).adapter{...}` returns — never
+          # spliced into `specialArgs` — because WHERE it reaches the
+          # target-facing reader is Q2 (reduced to B vs C, spec §4.2) and this
+          # construction picks neither arm.
+          peerRelation = {
+            __element = "peerRelation";
+            name = "peers/${class}";
+            inherit admitted;
+            withheld = bounded.withheld readerId;
+          };
         in
         if unknownCarriageMembers != [ ] then
-          throw "gen-bind: mkSystemTerminal: adapter invoked with unrecognised carriage member(s) [ ${builtins.concatStringsSep " " unknownCarriageMembers} ] — accepted members are extent, extraModules, passthrough, thunkBindings."
+          throw "gen-bind: mkSystemTerminal: adapter invoked with unrecognised carriage member(s) [ ${builtins.concatStringsSep " " unknownCarriageMembers} ] — accepted members are extent, extraModules, passthrough, thunkBindings, peerGraph, marksOf, readerId."
         else
           {
-            inherit thunkBindings;
+            inherit thunkBindings peerRelation;
 
             # `Body` is the class module LIST. The design of record's amendment A
             # rules this identification by name: `wrapAll`'s partial
@@ -347,8 +417,14 @@ let
                 # KEEPS THEM APART. `nodes` here is TARGET-FACING — what a class
                 # module reads as `nodes.<peer>.config` — and it stays `nodes` by
                 # construction, because after the split nothing derives it from the
-                # carriage name. The carriage side is `extent`: the realized set for
-                # this class, whose spine is the class's node keys.
+                # carriage name (spec §2.5: "nodes stays the target-facing name").
+                # The carriage side is `extent`: the realized set for this class,
+                # whose spine is the class's node keys. **What lands here is
+                # `admittedExtent`, not `extent`** — the admitted-key restriction
+                # under this reading node's marks (§2.1), never the whole class and
+                # never `bounded`/`bounded.nodes` (§2.1, §2.3: `boundedBy` inherits
+                # `nodes` unchanged, so that value would emit every withheld peer's
+                # key too).
                 #
                 # `passthrough` is the TARGET-OWNED channel and it splices WHOLE.
                 # Its keys are the consumer's own — `osConfig` is home-manager's arg
@@ -372,7 +448,7 @@ let
                   if passthrough ? nodes then
                     throw "gen-bind: mkSystemTerminal: the target-owned passthrough carries `nodes`, which this adapter emits itself — splicing it would silently replace the peer set. Rename that key in the passthrough."
                   else
-                    { nodes = extent; } // passthrough;
+                    { nodes = admittedExtent; } // passthrough;
               };
 
             inherit interpret;

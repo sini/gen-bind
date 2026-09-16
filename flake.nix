@@ -1,16 +1,29 @@
 {
   description = "gen-bind: module binding with external arguments for Nix";
 
-  # gen-bind is nixpkgs-lib-free (purity remediation): the library depends only on
-  # gen-prelude (pure, zero-input). It stays module-system-*aware* — it emits modules
-  # in the nixpkgs `__functionArgs`/`_file` convention via locally-vendored helpers
-  # (lib/module-convention.nix) — but imports no `nixpkgs.lib`.
+  # gen-bind is nixpkgs-lib-free (purity remediation): it stays module-system-*aware*
+  # — it emits modules in the nixpkgs `__functionArgs`/`_file` convention via
+  # locally-vendored helpers (lib/module-convention.nix) — but imports no
+  # `nixpkgs.lib`. TWO dependencies now, both pure and nixpkgs-lib-free:
+  # gen-prelude and gen-graph — the already-shipped ADR-0026 boundary-mark
+  # mechanism the extent peer-read shape reuses rather than reconstructs
+  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2.2, §4.1 Q1 Arm
+  # B: "gen-bind acquires gen-graph, ending its one-input shape").
+  #
+  # ★ THE `follows` IS LOAD-BEARING, NOT HYGIENE. Without it gen-graph resolves
+  # its own gen-prelude and the lock carries TWO instances of one library. One
+  # prelude in the closure means the shim's `graph` and the flake's `graph` are
+  # the same construction rather than two that happen to agree.
   inputs = {
     gen-prelude.url = "github:sini/gen-prelude";
+    gen-graph = {
+      url = "github:sini/gen-graph";
+      inputs.gen-prelude.follows = "gen-prelude";
+    };
   };
 
   outputs =
-    { gen-prelude, ... }:
+    { gen-prelude, gen-graph, ... }:
     {
       # `nix flake check` forces the WHNF of every top-level output and nothing deeper, so this root's
       # green quantified over the `lib` SPINE alone: a member of the published surface could throw and
@@ -25,7 +38,10 @@
           # paths differ only in who supplies the arguments. Here the flake supplies them, so
           # `follows` governs every argument passed, while the standalone path falls back to
           # `ci/flake.lock`.
-          surface = import ./. { prelude = gen-prelude.lib; };
+          surface = import ./. {
+            prelude = gen-prelude.lib;
+            graph = gen-graph.lib;
+          };
         in
         builtins.deepSeq (builtins.mapAttrs (_: builtins.typeOf) surface) surface;
     };

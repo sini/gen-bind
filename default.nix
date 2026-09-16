@@ -1,6 +1,8 @@
 # Standalone (non-flake) entry. Flake consumers should use the `.lib` output.
 #
-# gen-bind is nixpkgs-lib-free (purity remediation): its one dependency is gen-prelude.
+# gen-bind is nixpkgs-lib-free (purity remediation): its two dependencies are gen-prelude and
+# gen-graph — the ADR-0026 boundary-mark mechanism the extent peer-read shape reuses rather than
+# reconstructs (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2.2, §4.1 Q1 Arm B).
 #
 # THREE CHANNELS, ONE PRECEDENCE, AND NONE OF THEM IS A PROBE. A named formal per dependency wins;
 # the `inputs` bag is next, tested by attrset membership so a supplied-but-throwing value throws as
@@ -11,7 +13,7 @@
 # lock and is no longer read by Nix code, which is what lets one rule hold across the roster: a root
 # lock exists only where the root flake declares inputs, while `ci/flake.lock` exists everywhere —
 # including at the libraries that declare no inputs at all and so could hold no shim under the old
-# rule. The one dependency is a root input of the ci lock, so its path below is one segment.
+# rule. Both dependencies are root inputs of the ci lock, so both paths below are one segment.
 #
 # `src` AND `dep` ARE FORMALS, NOT `let` BINDINGS, AND THAT IS THE INJECTABLE RESOLVER SEAM — the
 # one channel a cell can close. `src` is the only expression here that fetches; everything else
@@ -69,6 +71,7 @@ in
   # `...` here, and no caller passes a name this root does not declare.
   wire ? { deps, resolve }: import ./lib deps,
   prelude ? inputs.gen-prelude or (dep [ "gen-prelude" ]),
+  graph ? inputs.gen-graph or (dep [ "gen-graph" ]),
 }:
 # THE BODY IS EAGER, AND THAT IS WHAT MAKES THE ENTRY CELL TOTAL RATHER THAN PARTIAL. `forced` forces
 # every wired dependency to WHNF before `./lib` sees it, so a default that cannot resolve is loud AT
@@ -77,7 +80,7 @@ in
 # THE FORCE STOPS AT WHNF DELIBERATELY: `builtins.seq` of an attrset does not force its members, so
 # this reaches the dependency's root VALUE and never a member of it.
 let
-  deps = { inherit prelude; };
+  deps = { inherit prelude graph; };
   forced = builtins.deepSeq (builtins.mapAttrs (_: builtins.typeOf) deps) null;
 in
 builtins.seq forced (wire {

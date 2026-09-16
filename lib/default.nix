@@ -1,4 +1,4 @@
-{ prelude }:
+{ prelude, graph }:
 let
   thunkLib = import ./thunk.nix { inherit prelude; };
   provenanceLib = import ./provenance.nix { inherit prelude; };
@@ -10,7 +10,7 @@ let
   signatureLib = import ./signature.nix { inherit prelude; };
   wrapLib = import ./wrap.nix { inherit prelude; };
   argEnvLib = import ./arg-env.nix { };
-  crossingLib = import ./crossing.nix { inherit prelude; };
+  crossingLib = import ./crossing.nix { inherit prelude graph; };
 in
 {
   # The boundary crossing: the crossing node, its derived demand relation, the

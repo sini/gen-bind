@@ -37,7 +37,9 @@
 #
 # ★★★ O-INJ-2 IS NOT HERE, AND ITS ABSENCE IS A DECISION. It requires a real
 # `composed.values` produced by `compose`, which gen-bind cannot reach —
-# gen-bind depends on gen-prelude and nothing else. It was RUN as an evaluation
+# gen-bind depends on gen-prelude and gen-graph (the extent peer-read shape,
+# specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1), and neither
+# reaches `compose`/gen-algebra. It was RUN as an evaluation
 # and its verdict is recorded at the site it governs, in
 # `lib/crossing-adapter-set.nix`'s ADR-0023 declaration. Its nearest landed
 # neighbour is gen-flake's `ci/tests/flake-module.nix`
@@ -49,6 +51,7 @@
 # a home in a repository scheduled for orphaning.
 {
   genBind,
+  graph,
   lib,
   ...
 }:
@@ -72,6 +75,34 @@ let
   c = x.contractTerm;
 
   inherit (genBind.crossing) injectAdapter mkSystemTerminal mkFlakeTerminal;
+
+  # ── the identity peer carriage (extent peer-read shape, Q5 Arm A) ────────────
+  # `mkSystemTerminal(...).adapter{...}` now requires `peerGraph`/`marksOf`/
+  # `readerId` (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4,
+  # Q4 RULED: never defaulted). None of the fixtures in this suite exercise
+  # NARROWING — that is `crossing-extent-peer.nix`'s job — so every call site
+  # here wants the IDENTITY peer relation: every key of its own `extent` peers
+  # with every other, and no mark withholds anything, which reproduces this
+  # suite's PRE-EXISTING behaviour (the whole `extent` reaches
+  # `specialArgs.nodes` unchanged) rather than re-deriving it per call site.
+  # `readerId` is arbitrary — `boundedBy`'s `at` falls back to `classify id`
+  # for any id outside `peerGraph`'s own node list (gen-graph/lib/query.nix),
+  # and `marksOf` here ignores its argument entirely, so no reader is ever
+  # withheld anything regardless of which name is picked.
+  identityCarriage =
+    carriage:
+    let
+      keys = builtins.attrNames (carriage.extent or { });
+    in
+    carriage
+    // {
+      peerGraph = graph.labeledFrom {
+        nodes = keys;
+        perLabel.peer = _id: keys;
+      };
+      marksOf = _id: [ ];
+      readerId = "fixture";
+    };
 
   # ── inject fixtures ──────────────────────────────────────────────────────────
 
@@ -246,14 +277,15 @@ let
       };
     };
     locateConfig = u: u.config;
+    class = "host";
   };
 
-  systemAdapter = systemTerminal.adapter {
+  systemAdapter = systemTerminal.adapter (identityCarriage {
     extent = {
       peer.config.addr = "10.0.0.2";
     };
     extraModules = [ extraModule ];
-  };
+  });
 
   systemClosed = pipeline {
     imports.host = imp c.any;
@@ -270,7 +302,7 @@ let
   # cell in this suite entered its true branch: every carriage above omits the
   # field. A defect in that branch was invisible, and an equality taken over a
   # carriage that never carries one measures half the contract.
-  systemAdapterOwned = systemTerminal.adapter {
+  systemAdapterOwned = systemTerminal.adapter (identityCarriage {
     extent = {
       peer.config.addr = "10.0.0.2";
     };
@@ -279,7 +311,7 @@ let
     # home-manager's arg name and is correct HERE — framework naming is surface
     # vocabulary at the surface; what was wrong was pinning it as a carriage field.
     passthrough.osConfig.marker = "target-owned";
-  };
+  });
 
   systemClosedOwned = pipeline {
     imports.host = imp c.any;
@@ -313,13 +345,13 @@ let
   targetArgsForPassthrough =
     passthrough:
     let
-      a = systemTerminal.adapter {
+      a = systemTerminal.adapter (identityCarriage {
         extent = {
           peer.config.addr = "10.0.0.2";
         };
         extraModules = [ ];
         inherit passthrough;
-      };
+      });
     in
     (a.wrapUnit [ ] [ ]).config.specialArgs;
 
@@ -430,10 +462,10 @@ let
   collisionModules = [ classModule ];
 
   crossingPathModules =
-    (systemTerminal.adapter {
+    (systemTerminal.adapter (identityCarriage {
       extent = { };
       extraModules = [ ];
-    }).bindFormals
+    })).bindFormals
       { host = collidingValue; }
       collisionModules;
 
@@ -463,6 +495,7 @@ let
       };
     };
     locateConfig = u: u.config;
+    class = "host";
   };
 
   isConfigTerminal = mkSystemTerminal {
@@ -470,6 +503,7 @@ let
       built = a.modules;
     };
     locateConfig = u: u;
+    class = "host";
   };
 
   locatorArgs = {
@@ -481,20 +515,20 @@ let
   dotConfigClosed = pipeline (
     locatorArgs
     // {
-      withAdapter = dotConfigTerminal.adapter {
+      withAdapter = dotConfigTerminal.adapter (identityCarriage {
         extent = { };
         extraModules = [ ];
-      };
+      });
     }
   );
 
   isConfigClosed = pipeline (
     locatorArgs
     // {
-      withAdapter = isConfigTerminal.adapter {
+      withAdapter = isConfigTerminal.adapter (identityCarriage {
         extent = { };
         extraModules = [ ];
-      };
+      });
     }
   );
 
@@ -511,11 +545,12 @@ let
     (mkSystemTerminal {
       evaluator = { modules, specialArgs }: lib.evalModules { inherit modules specialArgs; };
       locateConfig = c: c;
+      class = "host";
     }).adapter
-      {
+      (identityCarriage {
         extent = { };
         extraModules = [ ];
-      };
+      });
 
   # ══ O-1 — SITE 3's GROUND: the value-shape thunk sniff (`wrap.nix`'s
   # `isThunkArg`) routes a caller-supplied closure into the target's OWN
@@ -556,12 +591,13 @@ let
     (mkSystemTerminal {
       evaluator = { modules, specialArgs }: lib.evalModules { inherit modules specialArgs; };
       locateConfig = c: c;
+      class = "host";
     }).adapter
-      {
+      (identityCarriage {
         extent = { };
         extraModules = [ ];
         thunkBindings = [ "x" ];
-      };
+      });
 
   optoutO2ThunkResolves =
     (optoutO2ThunkAdapter.wrapUnit (optoutO2ThunkAdapter.bindFormals {
@@ -1004,6 +1040,12 @@ in
   #
   # WHAT A FAILING RUN LOOKS LIKE: `nodes` reappears as a carriage formal — the
   # delivery surface's rename reverted or half-applied.
+  # ★ EXTENT PEER-READ SHAPE (Q4 RULED): `peerGraph`/`marksOf`/`readerId` joined
+  # the carriage formal set as REQUIRED, never-defaulted members
+  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4) — none of
+  # them is the retired framework name either, so the property this oracle
+  # tests (no `nodes` among the carriage formals) is unaffected; only the
+  # exact set grew.
   flake.tests.crossing-adapter-set.test-o-name-1b-carriage-formals-carry-no-framework-name = {
     expr = builtins.sort builtins.lessThan (
       builtins.attrNames (builtins.functionArgs systemTerminal.adapter)
@@ -1011,6 +1053,9 @@ in
     expected = [
       "extent"
       "extraModules"
+      "marksOf"
+      "peerGraph"
+      "readerId"
     ];
   };
   # CONTROL, same predicate, same run — `nodes` is genuinely absent from the

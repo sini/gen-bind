@@ -30,7 +30,7 @@
 # ENCODING and no caller owes a sort. Two emitters producing the same relata with
 # different content yield one node with contributions from both — refusal at
 # minting is foreclosed, refusal at content merge stays available.
-{ prelude }:
+{ prelude, graph }:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
   termLib = import ./crossing-term.nix { inherit prelude; };
@@ -46,7 +46,7 @@ let
   # interpreter is threaded in because it is SUBSTRATE-side and target-agnostic:
   # an adapter chooses its Body, never its own contract semantics.
   adapterSetLib = import ./crossing-adapter-set.nix {
-    inherit prelude;
+    inherit prelude graph;
     inherit (contractLib) interpret;
   };
 

@@ -3,29 +3,36 @@
 # with `import ../lib` from ci's own inputs and so never evaluates the root shim. This is the cell
 # that does — the L1 migration replaced this file's PREDECESSOR (the pre-arm-B shape, which compared
 # a standalone `import ../.. { inherit prelude; }` against `genBind`'s `attrNames` and asserted
-# totality over that same two-key argument set) with the resolver-seam shape below: one dependency,
-# `prelude`, wired the same three-channel way every other library in this roster now is.
+# totality over that same two-key argument set) with the resolver-seam shape below: TWO dependencies
+# now, `prelude` and `graph` (the extent peer-read shape,
+# specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1 Q1 Arm B: "gen-bind acquires
+# gen-graph, ending its one-input shape") — both wired the same three-channel way every other
+# library in this roster now is.
 #
-# ★★ THE CELL IS PURE, AND THE PURITY IS A CONSEQUENCE OF HOW IT IS CALLED. The shim's one dependency
-# default `builtins.fetchTree`s the flake-locked revision; supplying it explicitly means that default
-# is never forced, so this reaches the network not at all. What it tests is the shim's SIGNATURE and
-# its DELEGATION — which is precisely where the defect lives. The bare `import ../.. { }` form does
-# NOT have this property, and the difference is measured rather than assumed: with the shim's `src`
-# formal replaced by a `throw`, the bare form aborts — reported at the `prelude` key — while the
+# ★★ THE CELL IS PURE, AND THE PURITY IS A CONSEQUENCE OF HOW IT IS CALLED. Each of the shim's
+# dependency defaults `builtins.fetchTree`s its flake-locked revision; supplying both explicitly
+# means neither default is ever forced, so this reaches the network not at all. What it tests is the
+# shim's SIGNATURE and its DELEGATION — which is precisely where the defect lives. The bare
+# `import ../.. { }` form does NOT have this property, and the difference is measured rather than
+# assumed: with the shim's `src` formal replaced by a `throw`, the bare form aborts, while the
 # supplied form evaluates clean with that same `throw` installed.
 #
-# One key, because this shim constructs and this library reaches exactly one sibling:
+# Two keys, because this shim constructs and this library reaches exactly two siblings:
 #   prelude — `buildSignature`'s `.bound` field is built by `prelude.genAttrs` over the bound
 #             argument names, so forcing it is what drives the call through gen-prelude rather than
 #             merely returning a record gen-bind assembled on its own.
+#   graph   — reached only through `genBind.crossing.mkSystemTerminal(...).adapter{...}`, which
+#             calls `graph.boundedBy`/`graph.forgetLabels` (ADR-0026's boundary-mark mechanism,
+#             reused) to bound the extent peer read; not forced by constructing `genBind` alone.
 #
 # THE KEY SET IS THE SIBLING SET, and holding that an identity is what keeps this cell's coverage
-# total. The shim constructs exactly the one sibling `../lib` reads, so that sibling has a key here
+# total. The shim constructs exactly the two siblings `../lib` reads, so each sibling has a key here
 # and a reader in the library, and nothing is left outside this cell's reach the way an unread formal
 # would be.
 {
   genBind,
   prelude,
+  graph,
   lib,
   ...
 }:
@@ -49,7 +56,7 @@ let
   # TWO PREDICATES, and the totality cell would then be comparing the shim against a copy nothing
   # applies.
   entryArgs = {
-    inherit prelude;
+    inherit prelude graph;
     # The shim's own plumbing, which this cell is now obliged to CHOOSE rather than inherit. The
     # `throw` is what makes non-hermeticity IMPOSSIBLE for this application rather than merely
     # detected — but it is NOT the guard: a shim carrying `...` would swallow these keys unread and
@@ -348,9 +355,12 @@ in
   # it. The two arms SHARE `repoOf`, hence share `shimResolve`, hence share `default.nix`'s own fold;
   # this one exercises it AT AN INPUT THE MAIN ARM DOES NOT USE — a hand-written lock whose path walk
   # and whose last-segment shortcut land on different nodes by construction. Transcribed verbatim
-  # rather than simplified: this library's own `ci/flake.lock` has only one wired path (`prelude`),
-  # and the cell above cannot discriminate the resolver rule on it at all, so this hermetic fixture
-  # carries the entire discriminating power for the rule at this library.
+  # rather than simplified: this library's own `ci/flake.lock` carries TWO wired paths now
+  # (`prelude`, `graph` — the extent peer-read shape,
+  # specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1 Q1 Arm B), and BOTH are
+  # single-segment DIRECT edges from root rather than `follows` walks, so the cell above still
+  # cannot discriminate the resolver rule on either of them, and this hermetic fixture carries the
+  # entire discriminating power for the rule at this library.
   flake.tests.entry.test-control-the-follows-resolver-discriminates = {
     expr = repoOf followsFixture [
       "a"
