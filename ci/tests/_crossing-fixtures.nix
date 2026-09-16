@@ -94,6 +94,9 @@ rec {
     wrapFn = f: { wrapFnOf = f; };
     wrapUnit = body: units: { inherit body units; };
     interpret = x.interpret;
+    # REQUIRED (§2.2 of the thunk-channel spec) — authorizes nothing, so every
+    # suite closing a pipeline against this fixture keeps its existing GREEN.
+    thunkBindings = null;
   };
 
   codeOf = r: r.refusal.code;

@@ -131,45 +131,68 @@ let
           inherit mergeStrategies defaultMergeStrategy bindings;
         };
 
-        # ★★★ ADR-0023 (b) SITE 3 — the value-shape sniff below is a CROSSING-
-        # REACHABLE ROUTE, not discharged by construction (measured, gate v4 / O-1;
-        # falsifies the earlier premise that `thunkBindings`/`producerConfigs` being
-        # unoffered discharges this site).
+        # ★★★ ADR-0023 (b) SITE 3 — the value-shape sniff is RETIRED. Selection is
+        # now BY DECLARATION (`den-hoag-i546n`, the 2026-09-16 thunk-channel spec,
+        # construction 2c): `thunkBindings` is a REQUIRED Adapter member
+        # (`crossing-adapter.nix`'s `required`), validated by `mkAdapter` and READ
+        # by `close` (`crossing.nix`) before a crossing's value ever reaches this
+        # file. The SELECTION half of this site's defect is closed BY
+        # CONSTRUCTION: a value's shape has no bearing on whether it is resolved,
+        # only its key's presence in a caller-declared, substrate-checked list
+        # does — what crosses can no longer nominate its own treatment.
         #
-        # (i) THIS SITE DOES NOT MEET ADR-0023 (c). On the `thunkBindings == null`
-        # default — every shipped Adapter's default — this falls to a VALUE-SHAPE
-        # TEST on the crossed binding itself (`isList v && any (e: e ? __configThunk)
-        # v`) rather than a declared channel. A crossed value of that shape selects
-        # `resolveThunks` (`thunk.nix`), and `entry.__fn` — a caller-supplied closure
-        # — is applied INSIDE the target's fixpoint.
+        # (i) WHAT THIS CLOSES. On `thunkBindings == null` every key is now
+        # rejected by `isThunkArg` — not "usually", totally, for every value of
+        # `thunkBindings` and every shape of the bound value. There is no branch
+        # left that reads the value's shape at all. `resolveThunks` (`thunk.nix`)
+        # stays total on the newly reachable declared-but-plain and
+        # declared-but-not-a-list inputs.
         #
-        # (ii) THE PRICE: a substrate closure executes inside the target's
-        # evaluation. It reads `ctx` (the whole binding set passed to the wrapper)
-        # and `producerConfigs`, and it can throw anything `entry.__fn` throws,
-        # evaluated at the target's own recursion depth rather than the substrate's.
-        # O-1 measures the ground in one run: `armThunk` (a `__configThunk`-shaped
-        # value) rc=1, tripwire fired; `armPlain` (an ordinary attrset) rc=0, the
-        # in-run control, value returned verbatim.
+        # (ii) WHAT THIS DOES NOT CLOSE — the residual ADR-0013 obligation (§4.1
+        # of the spec above), carried forward UNWEAKENED. Once a key IS
+        # authorized, the SAME closure-inside-the-target's-fixpoint price the
+        # retired sniff always paid still applies: `entry.__fn` still runs against
+        # `ctx`/`producerConfigs` at the target's own recursion depth, not the
+        # substrate's (O-1 measures the ground: `armThunk` rc=1, tripwire fired;
+        # `armPlain` rc=0, the in-run control, value returned verbatim). This spec
+        # closes WHICH keys get that treatment (an authorization question), not
+        # WHEN or WHERE the treatment happens (a placement question). Site 3
+        # stays in ADR-0023's "declared interim" tier. The argued impossibility
+        # this declaration records under ADR-0013: resolving a thunk earlier than
+        # the target's own module-system fixpoint — against `config`/`ctx` that
+        # exist only once that fixpoint is running — is not available to this
+        # construction.
         #
-        # (iii) THE ARGUED IMPOSSIBILITY: closing this by construction would mean
-        # replacing the value-shape sniff with a typed Adapter channel for thunks —
-        # a `ThunkBindings` position threaded the way `bindArgEnv` is — which would
-        # have to change the Adapter TYPE itself (`crossing-adapter.nix`), not this
-        # file — the argued impossibility this declaration records under ADR-0013,
-        # not a scope limit on the record itself. Closing it is a crossing
-        # re-derivation question, carried by `den-hoag-i546n`.
+        # (iii) FACT A′'S ARGUED IMPOSSIBILITY (ADR-0013; §2.1 of the spec above).
+        # Fact A — "the value is `__configThunk`-shaped" — is derivable and stays
+        # so; `thunk.nix`'s `mkThunk` spells it in three plain-data keys, nothing
+        # substrate-owned. Fact A′ — "the supplier authorizes THIS crossing to run
+        # it" — is declared because it cannot be derived from the value, and NOT
+        # because no in-value spelling could ever carry authorization: a
+        # substrate-minted token CAN be checked in-value, by reference identity
+        # under Nix's own function-value equality (`{ m = sentinel; } ==
+        # { m = sentinel; }` holds; `{ m = sentinel; } == { m = copied; }` fails
+        # for a syntactically-copied `sentinel`, so a mint is unforgeable-by-copy).
+        # That construction is named and dismissed on a narrower, per-crossing
+        # ground: a minted value can prove only "gen-bind built this thunk", never
+        # "THIS crossing's target may run it now" — authorization is per-crossing
+        # and the value predates the crossing's own minting (this file's header,
+        # §1.1: crossings mint in strictly later passes than their relata). What
+        # would have to change for Fact A′ to become derivable: authorization
+        # would have to be knowable from a fact the CROSSING itself carries
+        # (Construction 3's residue-on-the-node shape, `crossing.nix`'s `mkLink`
+        # STEP 1b) rather than from the bound value — an available, unpriced
+        # construction, not a foreclosed one (spec §4.3), and not this spec's to
+        # deliver.
+        #
+        # `thunkBindings` is a required Adapter PRESENCE, never a placement
+        # position — it is NOT threaded the way `bindArgEnv` is (offered,
+        # placement-table-visible): it is validated-and-carried but does not vary
+        # `placement`'s outcome (`crossing-adapter.nix`'s `fields` vs `required`).
         #
         # Per-key thunk decision — the same predicate the eager detection used,
         # asked one key at a time so it forces only the key being demanded.
-        isThunkArg =
-          k:
-          if thunkBindings != null then
-            builtins.elem k thunkBindings
-          else
-            let
-              v = bindings.${k} or null;
-            in
-            builtins.isList v && builtins.any (entry: builtins.isAttrs entry && entry ? __configThunk) v;
+        isThunkArg = k: builtins.elem k (if thunkBindings == null then [ ] else thunkBindings);
 
         # The injected value for ONE bound arg. Membership in the injected attrset is
         # value-free (boundArgNames is functionArgs ∩ bindings keys); the merge-policy

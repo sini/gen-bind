@@ -670,6 +670,16 @@ let
       placed = builtins.map placementFor nodeList;
       badPlacement = firstRefusal placed;
 
+      # The substrate-placed subset — (Formals, Substrate) — is exactly the
+      # crossings `bindFormals` (and therefore `isThunkArg`) ever consults. Read
+      # only once `badPlacement == null` has guaranteed every element of `placed`
+      # is an `ok`, matching the `assemble` call below's own `r.value` idiom.
+      substrateConsulted =
+        r:
+        r.value.placement.channel == adapterLib.channel.formals
+        && r.value.placement.time == adapterLib.time.substrate;
+      substratePlacedNames = builtins.map (r: r.value.import) (builtins.filter substrateConsulted placed);
+
       gateCheck =
         if fragment.gate == null then
           ok null
@@ -701,6 +711,12 @@ let
     else
       andThen (adapterLib.mkAdapter adapter) (
         a:
+        let
+          declaredThunkBindings = if a.thunkBindings == null then [ ] else a.thunkBindings;
+          unmatchedThunkBindings = builtins.filter (
+            k: !(builtins.elem k substratePlacedNames)
+          ) declaredThunkBindings;
+        in
         if builtins.length fragment.bodies != 1 then
           # DERIVED FROM OPACITY, not invented: Body is target-owned and produced
           # or consumed ONLY by an Adapter, so the substrate cannot combine two.
@@ -724,6 +740,25 @@ let
           }
         else if badPlacement != null then
           badPlacement
+        else if unmatchedThunkBindings != [ ] then
+          # §2.3's check, restated per P2 (regate P2, applied at landing): a
+          # declared key naming nothing THIS ADAPTER WILL CONSULT — not merely
+          # naming no crossed import. `substratePlacedNames` is the
+          # (Formals, Substrate) subset `bindFormals`/`isThunkArg` ever reads;
+          # scoping to it (rather than to `nodeList` whole) is what keeps a
+          # declaration over a TargetInvoked-placed import from passing this
+          # check and then never being consulted — the exact vacuity 2b was
+          # rejected for, reachable here only by a mixed-channel Adapter no
+          # shipped instance is, but the Adapter type permits it.
+          refuse {
+            code = codes.thunkBindingsUnmatched;
+            blamed = party.adapterSelector;
+            witness = {
+              declared = declaredThunkBindings;
+              unmatched = unmatchedThunkBindings;
+              crossed = substratePlacedNames;
+            };
+          }
         else
           andThen gateCheck (
             _:

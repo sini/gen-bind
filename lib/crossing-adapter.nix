@@ -15,11 +15,22 @@
 #   wrapFn      :: Maybe ((TargetArgs -> Body) -> Body)
 #   wrapUnit    :: Body -> [TargetUnit] -> TargetUnit
 #   interpret   :: ContractTerm -> Value -> Either Violation Value
+#   thunkBindings :: Maybe [String]
 #
 # `Maybe` is realized as `null` for Nothing, and it is what the placement table
 # reads. The three `Maybe` fields are TOTAL: a missing key is malformed, not
 # permissive, so `null` is how "this adapter does not offer that position" is
 # said VISIBLY.
+#
+# ★ `thunkBindings` IS REQUIRED PRESENCE WITHOUT BEING A PLACEMENT POSITION —
+# ADR-0023 (c) site 3. It names the crossed keys the Adapter's own consuming
+# target is authorized to have resolved by a substrate-authored closure at
+# `bindFormals` time; `null` means "no keys authorized", the same total,
+# visible, non-throwing state the five fields above already model. It is NOT
+# in `fields`: `notFunction`, `offers` and `placement` stay `fields`-only, so a
+# `Maybe [String]` member neither breaks the function-only check nor presents
+# as a placement position in a refusal witness. `required` (below) is where its
+# presence is enforced; `close` (`crossing.nix`) is where its value is read.
 #
 # ★ PLACEMENT IS RESOLVED, NEVER STORED, AND THAT IS WHY THE ADAPTER IS NOT A
 # RELATUM. A crossing's identity is over its import, its binding and its target;
@@ -56,6 +67,14 @@ let
     "interpret"
   ];
 
+  # `thunkBindings` is PRESENT-and-required without being a PLACEMENT position:
+  # it is never added to `fields` (§2.1 of the thunk-channel spec — it would
+  # break `notFunction`, which is `fields`-only and function-typed, and it would
+  # falsely present a non-placement member as a placement position in a refusal
+  # witness). `required` is a second list, for presence alone; `notFunction`,
+  # `offers` and `placement` keep reading `fields`.
+  required = fields ++ [ "thunkBindings" ];
+
   # TAKEN-DEFAULT (code). §2.11 carries no row for a malformed Adapter; the
   # alternative to this row is Nix's own "called with unexpected argument", which
   # `tryEval` cannot catch — and refusal staying IN THE TYPE is exactly why the
@@ -63,8 +82,10 @@ let
   mkAdapter =
     a:
     let
-      missing = builtins.filter (f: !(a ? ${f})) fields;
+      missing = builtins.filter (f: !(a ? ${f})) required;
       notFunction = builtins.filter (f: a.${f} != null && !(builtins.isFunction a.${f})) fields;
+      thunkBindingsMalformed =
+        a ? thunkBindings && a.thunkBindings != null && !(builtins.isList a.thunkBindings);
     in
     if missing != [ ] then
       refuse {
@@ -93,14 +114,26 @@ let
           notFunction = notFunction;
         };
       }
+    else if thunkBindingsMalformed then
+      refuse {
+        code = codes.adapterMalformed;
+        blamed = party.adapterSelector;
+        witness = {
+          object = "Adapter";
+          reason = "thunkBindings is null or a list of names, not " + builtins.typeOf a.thunkBindings;
+        };
+      }
     else
       ok (
-        builtins.listToAttrs (
+        (builtins.listToAttrs (
           builtins.map (f: {
             name = f;
             value = a.${f};
           }) fields
-        )
+        ))
+        // {
+          inherit (a) thunkBindings;
+        }
       );
 
   offers = adapter: f: (adapter.${f} or null) != null;

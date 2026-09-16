@@ -175,6 +175,19 @@ in
     expected = [ "wrapUnit" ];
   };
 
+  # `thunkBindings` is `required`, not merely `fields` (§2.2 of the
+  # thunk-channel spec) — omitting it entirely is caught by the SAME
+  # `missing` check as any other required position, not a silent `null`.
+  # This is the cell that discriminates the CHOSEN construction (required,
+  # validated presence) from the rejected one (thread the value through
+  # `close`/carriage but never validate it is there at all): under the
+  # rejected construction `mkAdapter` would succeed and `.refusal` would not
+  # exist here.
+  flake.tests.crossing-adapter.test-adapter-missing-thunkbindings-refuses = {
+    expr = (x.mkAdapter (builtins.removeAttrs adapter [ "thunkBindings" ])).refusal.witness.missing;
+    expected = [ "thunkBindings" ];
+  };
+
   flake.tests.crossing-adapter.test-adapter-refusal-is-a-value-not-an-arity-error = {
     expr = (builtins.tryEval (codeOf (x.mkAdapter { }))).success;
     expected = true;
@@ -196,6 +209,7 @@ in
       "bindArgEnv"
       "bindFormals"
       "interpret"
+      "thunkBindings"
       "wrapFn"
       "wrapUnit"
     ];

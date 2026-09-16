@@ -545,6 +545,29 @@ let
     (optoutSystemAdapter.wrapUnit (optoutSystemAdapter.bindFormals values optoutO1Body) [ ])
     .config.probeOut;
 
+  # ══ thunk-channel spec §3 O-2 — the same shape, DECLARED: a second Adapter,
+  # differing from `optoutSystemAdapter` by `thunkBindings = [ "x" ]` alone,
+  # crosses a REAL thunk (`genBind.mkThunk`, not O-1's inert marker) and it
+  # DOES resolve — the positive arm O-1's negative arm needs to mean anything.
+  # ★ NOT gen-flake's site-6 "O-2" below (ADR-0023 (b)'s own numbering, a
+  # different spec, a different oracle) — kept adjacent to O-1 instead, at the
+  # same altitude, to read as its pair.
+  optoutO2ThunkAdapter =
+    (mkSystemTerminal {
+      evaluator = { modules, specialArgs }: lib.evalModules { inherit modules specialArgs; };
+      locateConfig = c: c;
+    }).adapter
+      {
+        extent = { };
+        extraModules = [ ];
+        thunkBindings = [ "x" ];
+      };
+
+  optoutO2ThunkResolves =
+    (optoutO2ThunkAdapter.wrapUnit (optoutO2ThunkAdapter.bindFormals {
+      x = [ (genBind.mkThunk (_args: "resolved-through-the-adapter")) ];
+    } optoutO1Body) [ ]).config.probeOut;
+
   # ══ O-2 — SITE 6's GROUND: the placed head is a SUBSTRATE-AUTHORED functor.
   # The consumer hands a bare lambda; `wrapAllCore`'s partial-application
   # branch places `setFunctionArgs wrapper remainingArgs` instead — an attrset
@@ -1314,26 +1337,43 @@ in
   # STOP for the declaration at `crossing-adapter-set.nix` / `wrap.nix`, not a
   # cell to relax.
 
-  # ── O-1 · site 3 (`wrap.nix`'s `isThunkArg`) ─────────────────────────────────
+  # ── O-1 · site 3 (`wrap.nix`'s `isThunkArg`) — REPURPOSED, not migrated: its
+  #    whole premise inverts (§2.7 item 6; spec §3 O-1). Before this spec, an
+  #    UNDECLARED marker-shaped value's closure WAS invoked — that was site
+  #    3's price, and this cell's ORIGINAL form asserted exactly that
+  #    (`expected = false` on a `tryEval` around forcing the tripwire). After
+  #    §2.5, selection is by declaration alone, so the SAME undeclared value
+  #    must now cross UNTOUCHED: the closure never runs, and the value still
+  #    carries `__configThunk`/`__fn` verbatim, opaque and unresolved — the
+  #    defect's INVERSE, which is what this cell now witnesses.
   #
-  # WHAT A FAILING RUN LOOKS LIKE: `isThunkArg` stops selecting on value
-  # shape (the seeded defect is `isThunkArg = _: false`) and the tripwire
-  # closure is never called — forcing `armThunk` then SUCCEEDS instead of
-  # throwing, reading identically to `armPlain`, the in-run control, and the
-  # two arms no longer discriminate.
-  flake.tests.crossing-adapter-set.test-optout-o1-site-3-thunk-shape-crosses-a-caller-closure = {
-    expr =
-      (builtins.tryEval (
-        builtins.deepSeq (optoutO1 {
+  # WHAT A FAILING RUN LOOKS LIKE: `isThunkArg` still selects on VALUE SHAPE
+  # somewhere on the reachable path — at stock, or with the retired sniff kept
+  # ALONGSIDE the declared branch (the regression a builder writes when they
+  # add the channel without removing the inference) — so the tripwire closure
+  # runs and `tryEval` reads `success = false`, or the crossed head is no
+  # longer the opaque marker attrset. The whole property is asserted inside
+  # ONE `tryEval` so a thrown tripwire is a VALUE, not an uncatchable cell
+  # error; a full `==` against the original is unavailable — Nix throws
+  # comparing function values and `__fn` is one.
+  flake.tests.crossing-adapter-set.test-optout-o1-site-3-undeclared-thunk-shape-crosses-untouched = {
+    expr = builtins.tryEval (
+      let
+        h = builtins.head (optoutO1 {
           x = [
             {
               __configThunk = true;
               __fn = _args: throw "O-1 tripwire: a substrate closure executed inside the target's evaluation";
             }
           ];
-        }) true
-      )).success;
-    expected = false;
+        });
+      in
+      builtins.isAttrs h && h ? __configThunk && h ? __fn
+    );
+    expected = {
+      success = true;
+      value = true;
+    };
   };
 
   flake.tests.crossing-adapter-set.test-control-optout-o1-a-plain-list-value-crosses-untouched = {
@@ -1341,6 +1381,21 @@ in
       x = [ { notAThunk = true; } ];
     };
     expected = [ { notAThunk = true; } ];
+  };
+
+  # ── thunk-channel spec §3 O-2 — the positive arm O-1 is paired against: the
+  #    SAME marker shape, DECLARED (`thunkBindings = [ "x" ]`), crosses
+  #    THROUGH `resolveThunks` instead of untouched — `__fn` runs and its
+  #    result, not the marker, is what `config.probeOut` reads.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the declaration is threaded to `mkAdapter`
+  # and `close` but not to `bindValue` (e.g. `bindFormals`'s `wrapAllCore` call
+  # drops `inherit thunkBindings;`, §2.4) — `isThunkArg` then sees `null`
+  # regardless of the carriage, this cell's read collapses to O-1's own
+  # untouched-marker reading, and the two cells stop discriminating.
+  flake.tests.crossing-adapter-set.test-optout-o2-site-3-declared-thunk-resolves-through-the-adapter = {
+    expr = optoutO2ThunkResolves;
+    expected = [ "resolved-through-the-adapter" ];
   };
 
   # ── O-2 · site 6 (`wrapAllCore`'s partial-application branch) ───────────────

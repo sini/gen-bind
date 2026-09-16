@@ -647,6 +647,71 @@ in
     expected = "adapter-malformed";
   };
 
+  # ══ thunk-channel spec §3 O-4 — `close` refuses a DECLARED-BUT-UNMATCHED
+  # `thunkBindings` name (P2's remedy: scoped to the substrate-PLACED subset
+  # via `placed`, not raw `nodeList`) rather than letting an authorization for
+  # a name that never crosses pass silently.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the `else if unmatchedThunkBindings != []`
+  # arm is dropped from `close` (or moved ahead of `badPlacement`, changing
+  # which refusal wins on an incoherent fleet) — this cell then reads whatever
+  # the next arm produces: `isOk` where `codeOf` is asked, `.refusal` missing
+  # entirely, an uncatchable attribute error rather than a named refusal.
+  flake.tests.crossing-operations.test-close-refuses-a-declared-but-unmatched-thunk-binding = {
+    expr = codeOf (pipeline {
+      imports.host = imp c.any;
+      bindings.host = plainB 1;
+      withAdapter = adapter // {
+        thunkBindings = [ "nope" ];
+      };
+    });
+    expected = "thunk-bindings-unmatched";
+  };
+
+  flake.tests.crossing-operations.test-thunk-bindings-unmatched-witness-names-declared-unmatched-and-crossed = {
+    expr =
+      (pipeline {
+        imports.host = imp c.any;
+        bindings.host = plainB 1;
+        withAdapter = adapter // {
+          thunkBindings = [ "nope" ];
+        };
+      }).refusal.witness;
+    expected = {
+      declared = [ "nope" ];
+      unmatched = [ "nope" ];
+      crossed = [ "host" ];
+    };
+  };
+
+  # The control: the SAME crossing, the SAME single-name declaration, naming
+  # the name that DOES cross — admitted rather than refused.
+  flake.tests.crossing-operations.test-control-a-thunk-binding-naming-a-crossed-name-is-admitted = {
+    expr = x.isOk (pipeline {
+      imports.host = imp c.any;
+      bindings.host = plainB 1;
+      withAdapter = adapter // {
+        thunkBindings = [ "host" ];
+      };
+    });
+    expected = true;
+  };
+
+  # ══ thunk-channel spec §3 O-5 — `mkAdapter` CARRIES the declared value; it
+  # does not merely validate its shape and discard it. `close` (and, through
+  # it, `wrap.nix`'s `isThunkArg`) reads the value `mkAdapter` RETURNS, never
+  # the caller's own copy of the argument.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the `ok` reconstruction in `mkAdapter` hard-
+  # codes `thunkBindings = null` (or omits the member) instead of `inherit (a)
+  # thunkBindings;` — the Adapter still passes validation (required-and-
+  # present is satisfied by the caller's argument, not by what comes back),
+  # but the declared LIST is gone by the time anything downstream reads it.
+  flake.tests.crossing-operations.test-mkadapter-carries-the-declared-thunkbindings-value = {
+    expr = (x.mkAdapter (adapter // { thunkBindings = [ "host" ]; })).value.thunkBindings;
+    expected = [ "host" ];
+  };
+
   # A required import with no crossing node AND no `satisfiedBy` edge is the
   # completeness check — a QUERY OVER THE EDGE RELATION, not an attribute read.
   flake.tests.crossing-operations.test-close-refuses-an-unsatisfied-required-import = {

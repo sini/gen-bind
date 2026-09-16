@@ -90,6 +90,7 @@ in
             networking.hostName = "iceberg";
           };
         };
+        thunkBindings = [ "ch" ];
       }).module.out;
     expected = "h-iceberg";
   };
@@ -139,6 +140,7 @@ in
             networking.hostName = "bound-cfg";
           };
         };
+        thunkBindings = [ "ch" ];
       }).module.out;
     expected = "bound-cfg";
   };

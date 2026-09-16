@@ -159,6 +159,7 @@ in
     gateSelectOutsideEnum = "gate-select-outside-enum";
     fragmentToken = "fragment-token";
     adapterMalformed = "adapter-malformed"; # TAKEN-DEFAULT
+    thunkBindingsUnmatched = "thunk-bindings-unmatched"; # TAKEN-DEFAULT
     valueNotObtainable = "value-not-obtainable"; # TAKEN-DEFAULT
     bodyCount = "close-body-count"; # TAKEN-DEFAULT
     deltaProjectionMissing = "delta-projection-missing"; # TAKEN-DEFAULT

@@ -95,6 +95,7 @@ in
           bindings = {
             mydata = [ thunkValue ];
           };
+          thunkBindings = [ "mydata" ];
         };
         evaluated = evalWith [
           result.module
@@ -190,6 +191,7 @@ in
             };
             mydata = [ thunkValue ];
           };
+          thunkBindings = [ "mydata" ];
         };
         evaluated = evalWith [ result.module ];
       in
