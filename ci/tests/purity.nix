@@ -268,6 +268,33 @@ in
     ];
   };
 
+  # ★ THE DETECTOR CONTROL: `scan` — the exact function `violations` above calls — is proven to catch
+  # a planted violation. `violations = scan sources` returns `[ ]` when the library is clean, but a
+  # `scan` that is broken (a `hasInfix` that never matches, a `forbidden` list gone empty, a
+  # `forbiddenFor` that exempts everything) returns that same `[ ]`, and nothing above tells the two
+  # apart — a scan with no teeth is indistinguishable from a scan over a clean library. This cell runs
+  # the identical `scan`, over `sources ++` one synthetic entry never written to disk, so the firing is
+  # proven by the same call that reports the tree clean (`scan sources == [ ]` above ⇒
+  # `scan (sources ++ [ entry ]) == scan [ entry ]`, since `scan` reads each source independently).
+  #
+  # The expectation names the violation LIST, not mere non-emptiness: a detector that fires on the
+  # wrong token, or whose `file: 'tok'` message has decayed into something a reader cannot act on off
+  # a red CI, is broken in the way that matters. The planted line also carries a trailing
+  # `# nixpkgs`-bearing comment, so this cell also reds if `stripComments` stops running — an
+  # unstripped `nixpkgs` would surface as a second, spurious violation.
+  flake.tests.purity.test-detector-catches-injected-violation = {
+    expr = scan (
+      sources
+      ++ [
+        {
+          name = "<injected>";
+          code = stripComments "  foo = lib.types.str; # comment mentioning nixpkgs is stripped";
+        }
+      ]
+    );
+    expected = [ "<injected>: 'lib.'" ];
+  };
+
   # THE WALK DESCENDS, AND CARRIES ITS PREFIX. lib/ is flat today, so the invariant cell exercises
   # the recursive branch not at all and would keep passing if the walk quietly flattened — which is
   # precisely the state this replaced. The fixture tree is nested on purpose and carries a planted
