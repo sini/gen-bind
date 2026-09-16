@@ -304,10 +304,24 @@ let
             # under stock formal partial application (`attribute 'x' missing`) and
             # READS THE BINDING under the seeded `_module.args` placement — the
             # substitution widens every binding's reach to modules never inspected.
-            # Whether ADR-0023 (c) admits an Adapter that binds by PARTIAL
-            # APPLICATION AT ALL is what would have to change, and that question is
-            # out of scope for this record — it is `den-hoag-i546n`'s open question
-            # (§4.2), not picked here.
+            # That arm is spent, not unexplored. AND THE QUESTION IT STOOD IN FOR
+            # IS ANSWERED, DEFINITIONALLY rather than by this site's particulars:
+            # ADR-0023 (c)'s target is "the invariant holds UNQUALIFIED, BY
+            # CONSTRUCTION — what crosses is provably plain data", and partial
+            # application must leave a CALLABLE RESIDUAL for the unbound formal —
+            # a callable residual is not plain data, so (c) admits no Adapter that
+            # binds by genuine partial application, at any site. With that channel
+            # closed by definition and the only alternative closed by the reach
+            # widening above, ADR-0013 does not leave a scope limit to close on
+            # here — it MANDATES the declaration, the argued impossibility this
+            # record now states rather than a scope limit on the record itself.
+            # WHAT WOULD HAVE TO CHANGE for this to re-derive: (c) would have to
+            # admit a function-shaped crossing value as plain data, or a SCOPED
+            # alternative to `_module.args` — reaching only the modules this
+            # Adapter actually wrapped, not the target's whole evaluation — would
+            # have to exist. Neither obtains today, so this site stays declared
+            # PERMANENT under (b), structurally parallel to site 3's execution
+            # declaration.
             bindFormals =
               values: body:
               (wrapLib.wrapAllCore {
