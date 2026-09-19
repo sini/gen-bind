@@ -386,7 +386,7 @@ in
           };
           contracts.a = contract.isType "set";
         }).module
-        { config = { }; }
+          { config = { }; }
       ).out;
     expected = "READ-ME";
   };
@@ -404,10 +404,10 @@ in
           bindings.a = "BINDING";
           mergeStrategies.a = "system-wins";
         }).module
-        {
-          config = { };
-          a = "SYSTEM";
-        }
+          {
+            config = { };
+            a = "SYSTEM";
+          }
       ).out;
     expected = "SYSTEM";
   };
@@ -427,10 +427,10 @@ in
             v = 1;
           };
         }).module
-        {
-          config = { };
-          a = "SYSTEM";
-        }
+          {
+            config = { };
+            a = "SYSTEM";
+          }
       ).out;
     expected = "SYSTEM";
   };

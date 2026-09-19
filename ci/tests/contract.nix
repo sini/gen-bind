@@ -8,7 +8,8 @@ in
       (contract.mk {
         check = _: true;
         message = "ok";
-      }) ? __contract;
+      })
+        ? __contract;
     expected = true;
   };
 
@@ -23,7 +24,8 @@ in
       (contract.apply c {
         name = "igloo";
         class = "nixos";
-      } null) ? name;
+      } null)
+        ? name;
     expected = true;
   };
 
