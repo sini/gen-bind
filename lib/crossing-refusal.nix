@@ -131,6 +131,7 @@ in
     litPayloadBudget = "lit-payload-budget";
     litPayloadThrows = "lit-payload-throws";
     emptyRelationKind = "empty-relation-kind";
+    relatumNotReference = "relatum-not-reference"; # TAKEN-DEFAULT
 
     # link
     readCtxUnresolvableSibling = "readctx-unresolvable-sibling";

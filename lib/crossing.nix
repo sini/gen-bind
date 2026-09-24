@@ -90,8 +90,33 @@ let
           inherit kind;
         };
       }
+    else if !builtins.isAttrs relata then
+      refuse {
+        code = codes.relatumNotReference;
+        blamed = party.caller;
+        witness = {
+          inherit kind;
+          got = builtins.typeOf relata;
+        };
+      }
     else
-      ok (hashIdentity kind (builtins.attrNames relata) (l: relata.${l}));
+      # A relatum is a reference, so a non-string in its place (a node record,
+      # say) is refused rather than minted over. Strings are not resolved here.
+      let
+        bad = builtins.filter (l: !builtins.isString relata.${l}) (builtins.attrNames relata);
+      in
+      if bad != [ ] then
+        refuse {
+          code = codes.relatumNotReference;
+          blamed = party.caller;
+          witness = {
+            inherit kind;
+            label = builtins.head bad;
+            got = builtins.typeOf relata.${builtins.head bad};
+          };
+        }
+      else
+        ok (hashIdentity kind (builtins.attrNames relata) (l: relata.${l}));
 
   # ── the declared surface ─────────────────────────────────────────────────────
   mergePolicyNames = [

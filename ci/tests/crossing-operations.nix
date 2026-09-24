@@ -486,6 +486,35 @@ in
     expected = false;
   };
 
+  # A relatum is a reference (a string); a record in its place is refused as a
+  # value, blaming the caller, never minted over.
+  flake.tests.crossing-operations.test-a-record-relatum-refuses-by-name = {
+    expr =
+      (x.mintIdentity _testHashIdentity "crossing" {
+        import = "db";
+        binding = "db";
+        target = {
+          identity = "thimble:x";
+        };
+      }).refusal.code or "minted-silently";
+    expected = "relatum-not-reference";
+  };
+
+  flake.tests.crossing-operations.test-a-record-link-target-refuses-by-name = {
+    expr =
+      let
+        frag = x.declare (sig simpleImports) { kind = "body"; };
+      in
+      (x.link { identity = "thimble:x"; } (proj simpleBindings) (supply simpleBindings) frag.value)
+      .refusal.code or "minted-silently";
+    expected = "relatum-not-reference";
+  };
+
+  flake.tests.crossing-operations.test-non-attrset-relata-refuse-by-name = {
+    expr = (x.mintIdentity _testHashIdentity "crossing" "foo").refusal.code or "minted-silently";
+    expected = "relatum-not-reference";
+  };
+
   flake.tests.crossing-operations.test-empty-relation-kind-refuses-by-name = {
     expr = codeOf (x.mintIdentity _testHashIdentity "" { import = "db"; });
     expected = "empty-relation-kind";
