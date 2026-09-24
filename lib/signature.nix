@@ -1,9 +1,18 @@
 # Module signature inference.
 #
 # Every wrap result includes a signature — what the module requires from
-# evalModules, what gen-bind injected, what's unsatisfied, and what collision
-# strategies would apply. Derived from existing wrapping computation at zero
-# additional cost.
+# evalModules, what gen-bind injected, what's unsatisfied, and the DECLARED
+# collision strategy per bound arg. Derived from existing wrapping computation
+# at zero additional cost.
+#
+# "Declared" means declared AT THE CALL: the cfg `mergeStrategies.<k>` entry,
+# else `defaultMergeStrategy`. A binding's own `_mergeStrategy` annotation is
+# also a declaration and is NOT reflected here — reading it would force the
+# binding value. So `declaredMergeStrategies` is not the effective strategy.
+# The runtime precedence is: cfg `mergeStrategies.<k>`, then the value's
+# `_mergeStrategy` annotation, then `defaultMergeStrategy`. The annotation
+# channel is `mergeStrategy.fromBindings`; reading `(fromBindings b).<k>`
+# forces binding `<k>` to WHNF.
 #
 # Academic: Cardelli 1997 §2-3 — program fragments carry typed interfaces
 # (imports/exports). A linkset declares what it provides and what it still
@@ -57,6 +66,8 @@
         inVocabulary && !isBound && !isOptional
       ) argNames;
 
-      mergeStrategies = prelude.genAttrs boundArgNames (k: mergeStrategies.${k} or defaultMergeStrategy);
+      declaredMergeStrategies = prelude.genAttrs boundArgNames (
+        k: mergeStrategies.${k} or defaultMergeStrategy
+      );
     };
 }

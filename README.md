@@ -198,6 +198,8 @@ bindings = {
 };
 ```
 
+Precedence at runtime: the cfg `mergeStrategies.<name>` entry wins, then the value's `_mergeStrategy` annotation, then `defaultMergeStrategy`. `mergeStrategy.fromBindings` reads the annotation channel alone, and reading `(fromBindings bindings).<name>` forces that binding value to WHNF.
+
 Collision detection runs when `mkMergeValidator` is called with the module args. Warnings (for `bindWins`/`systemWins`) and errors (for `error`) include provenance if set.
 
 ### Config Thunks
@@ -306,7 +308,7 @@ result.signature
 #     requires = { config = false; lib = false; };  # still needed from evalModules
 #     bound = { host = { optional = false; provenance = { source = "..."; }; }; };
 #     unsatisfied = [];  # vocabulary keys present but not injected
-#     mergeStrategies = { host = "bind-wins"; };
+#     declaredMergeStrategies = { host = "bind-wins"; };  # cfg entry, else default
 #   }
 ```
 
@@ -685,12 +687,12 @@ Removes `bindingNames` from the module's advertised formal args. Works on functi
 buildSignature { module; bindings; defaultMergeStrategy; mergeStrategies; provenance ? {}; vocabulary ? null; }
 ```
 
-Computes a signature record: `{ requires; bound; unsatisfied; mergeStrategies }`.
+Computes a signature record: `{ requires; bound; unsatisfied; declaredMergeStrategies }`.
 
 - `requires` — formal args not satisfied by bindings (pass to `evalModules`)
 - `bound` — `{ argName = { optional; provenance; }; }` for each injected arg
 - `unsatisfied` — arg names in `vocabulary` but not injected and not optional. `vocabulary` is what a caller declares it may supply — broader than the `bindings` of a single wrap site in a layered composition. Default `null` collapses `vocabulary` to `bindings`' own keys, so with the standard API this stays `[]` (honestly — nothing outside `bindings` was ever declared as forthcoming)
-- `mergeStrategies` — per-bound-arg strategy
+- `declaredMergeStrategies` — per-bound-arg DECLARED strategy: declared at the call, meaning the cfg `mergeStrategies.<name>` entry, else `defaultMergeStrategy`. A binding's own `_mergeStrategy` annotation is also a declaration, and this field excludes it, because reading it would force the binding value. It is therefore not the effective strategy; see the precedence in [Merge Strategies](#merge-strategies). The annotation channel is `mergeStrategy.fromBindings`, which forces the binding value to WHNF
 
 ### `adaptArgs`
 
