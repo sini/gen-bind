@@ -1,27 +1,17 @@
 # gen-bind REPL — all exports in scope. Run: nix repl --impure --file ci/repl.nix
 #
-# gen-bind is built from gen-prelude (nixpkgs-lib-free); prelude is resolved from the
-# ci flake.lock so the REPL needs no registry entry for gen-prelude. nixpkgs `lib` is
-# still exposed for interactive convenience.
-let
-  nixpkgs = import (builtins.getFlake "nixpkgs") { };
-  lock = builtins.fromJSON (builtins.readFile ./flake.lock);
-  node = lock.nodes.gen-prelude.locked;
-  prelude = import "${
-    builtins.fetchTree {
-      inherit (node)
-        type
-        owner
-        repo
-        rev
-        narHash
-        ;
-    }
-  }/lib";
-  genBind = import ../lib { inherit prelude; };
-in
+# The root declares only dependency formals, each defaulted from the root flake.lock, and never
+# `lib`. So it is called with this entry's arguments minus `lib`: none under `nix repl --file`,
+# where the root resolves its own pins, and the ci flake's own instances under `ci/tests/repl.nix`,
+# which keeps that cell from fetching. `prelude` is the one the root wired, read through its `wire`
+# seam rather than resolved a second time. `lib` rides beside the surface for convenience only.
 {
-  inherit (nixpkgs) lib;
-  inherit prelude genBind;
-}
-// genBind
+  lib ? (builtins.getFlake "nixpkgs").lib,
+  ...
+}@args:
+let
+  rootArgs = removeAttrs args [ "lib" ];
+  inherit (import ./.. (rootArgs // { wire = { deps, resolve }: deps; })) prelude;
+  genBind = import ./.. rootArgs;
+in
+{ inherit lib prelude genBind; } // genBind
