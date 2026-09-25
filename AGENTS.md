@@ -247,5 +247,11 @@ Crossing sub-surface (same command with `--apply 'l: builtins.attrNames l.crossi
 **Checks.** Test-runner invocation (from the repo root; CI runs the same command with `working-directory: ci`, `.github/workflows/ci.yml:13,18`):
 
 ```sh
-nix flake check ./ci
+nix develop ./ci --command ci                # the suites, guarded
+nix flake check ./ci                         # what CI runs; unguarded
 ```
+
+Run the suites locally through `ci`: it refuses when anything under a declared read root is
+unknown to git — any extension or name, `_`-prefixed included — and the remedy is `git add` or a
+move. The bare `nix flake check ./ci` and `nix-unit --flake ./ci#tests` are unguarded: they read a
+git-filtered copy of the tree, so an untracked cell is silently absent and the run stays green.

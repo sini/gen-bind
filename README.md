@@ -829,11 +829,15 @@ in `ci/` (which keeps a `nixpkgs` dependency for the test runner and the real `l
 driven by the production-safety equivalence gate and the `arg-env` crossing suite):
 
 ```bash
-cd ci
-nix run nixpkgs#nix-unit -- --flake .#tests            # all 392, across 22 suites
-nix run nixpkgs#nix-unit -- --flake .#tests.wrap       # one suite
-nix flake check                                        # full check incl. treefmt
+nix develop ./ci --command ci                          # all suites, guarded
+nix develop ./ci --command ci wrap                     # one suite, guarded
+nix flake check ./ci                                   # full check incl. treefmt; unguarded
 ```
+
+`ci` refuses when anything under a declared read root is unknown to git — any extension or name,
+`_`-prefixed included — and the remedy is `git add` or a move. The bare `nix-unit --flake ./ci#tests`
+and `nix flake check ./ci` are unguarded: they read a git-filtered copy of the tree, so an untracked
+cell is silently absent and the run stays green.
 
 Every refusal row of the crossing surface is armed by a planted violation **and** its conforming
 control in the same suite, cells named `test-control-*`: a row whose conforming input is untested has
