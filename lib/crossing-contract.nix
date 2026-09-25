@@ -110,6 +110,28 @@ let
 
   isContractTerm = v: builtins.isAttrs v && v ? __contractTerm;
 
+  # Each former's record is CLOSED. The whole term enters the import node's mint
+  # and `merge`'s structural equality, so a key the algebra does not own — a
+  # lambda or a path carried beside a known former — would decide equality over
+  # content the contract language does not own, and would throw inside the mint
+  # rather than refuse here.
+  formerFields = {
+    Any = [ ];
+    Never = [ ];
+    Prop = [ "pred" ];
+    Attrs = [ "fields" ];
+    List = [ "item" ];
+    And = [
+      "left"
+      "right"
+    ];
+    OrElse = [
+      "left"
+      "right"
+    ];
+  };
+  recordOf = former: builtins.sort builtins.lessThan ([ "__contractTerm" ] ++ formerFields.${former});
+
   declarerRefusal =
     code: witness:
     refuse {
@@ -148,8 +170,21 @@ let
         former = c.__contractTerm;
         vocabulary = formers;
       }
+    else if builtins.attrNames c != recordOf c.__contractTerm then
+      declarerRefusal codes.contractVocabulary {
+        former = c.__contractTerm;
+        fields = recordOf c.__contractTerm;
+        got = builtins.attrNames c;
+      }
+    else if c.__contractTerm == "Attrs" && !(builtins.isAttrs c.fields) then
+      declarerRefusal codes.contractVocabulary {
+        former = "Attrs";
+        field = "fields";
+        expected = "set";
+        got = builtins.typeOf c.fields;
+      }
     else if c.__contractTerm == "Prop" then
-      if !(preds ? ${c.pred}) then
+      if !(builtins.isString c.pred) || !(preds ? ${c.pred}) then
         declarerRefusal codes.contractVocabulary {
           pred = c.pred;
           vocabulary = builtins.attrNames preds;

@@ -174,6 +174,23 @@ let
     fields: decl:
     if !(builtins.isAttrs decl) then fields else builtins.filter (f: !(decl ? ${f})) fields;
 
+  importFieldTypes = {
+    required = {
+      expected = "bool";
+      ok = builtins.isBool;
+    };
+    sealed = {
+      expected = "bool";
+      ok = builtins.isBool;
+    };
+    satisfiedBy = {
+      expected = "TargetId (string) or null";
+      ok = v: v == null || builtins.isString v;
+    };
+  };
+  mistyped =
+    d: builtins.filter (f: !(importFieldTypes.${f}.ok d.${f})) (builtins.attrNames importFieldTypes);
+
   checkImportDecl =
     name: d:
     let
@@ -189,6 +206,17 @@ let
         inherit name;
         policy = d.merge;
         vocabulary = mergePolicyNames;
+      }
+    # Every compared field enters the import node's mint, so each is typed here,
+    # before the mint, and a wrong type refuses by name rather than throwing
+    # inside `hashIdentity` at `link`.
+    else if mistyped d != [ ] then
+      declarerRefusal codes.declarationMissingField {
+        object = "ImportDecl";
+        inherit name;
+        field = builtins.head (mistyped d);
+        expected = importFieldTypes.${builtins.head (mistyped d)}.expected;
+        got = builtins.typeOf d.${builtins.head (mistyped d)};
       }
     else
       contractLib.checkContract d.contract;
@@ -249,13 +277,26 @@ let
     };
 
   # ── declare ──────────────────────────────────────────────────────────────────
-  declare =
-    sig: body:
+  # The IMPORT NODE is fixed here (§2.1: "the import node at `declare`"), so a
+  # crossing names it by IDENTITY (ADR-0016 r4). Its preimage is the declaration
+  # under exactly the equality `merge` decides compatibility by — the name plus
+  # `importCompareFields`, provenance excluded — so two declarations `merge`
+  # accepts as one import mint one identity, and two it refuses mint two. The
+  # mint itself runs lazily, at the first `link` that crosses the name, and the
+  # thunk is shared by every later `link`, `merge` and `gate` of the fragment;
+  # `checkImportDecl` has already typed every compared field it will read.
+  importIdentity =
+    hashIdentity: n: d:
+    hashIdentity "import" ([ "name" ] ++ importCompareFields) (l: if l == "name" then n else d.${l});
+
+  mkDeclare =
+    hashIdentity: sig: body:
     andThen (checkSignature sig) (
       s:
       ok (mkFragment {
         signature = s;
         declared = s;
+        importIdentities = builtins.mapAttrs (importIdentity hashIdentity) s.imports;
         bodies = [ body ];
         crossings = [ ];
         nodes = { };
@@ -280,9 +321,15 @@ let
       dupExports = builtins.filter (n: fb.signature.exports ? ${n}) (
         builtins.attrNames fa.signature.exports
       );
-      shared = builtins.filter (n: fb.signature.imports ? ${n}) (builtins.attrNames fa.signature.imports);
+      # The DECLARED sets are compared, not the residues. A name `link` has
+      # crossed has left the residue but not the declaration, so comparing
+      # residues would accept a differing re-declaration of it, keep one side's
+      # import identity for both, and make the crossing count depend on merge
+      # order. Over the declared set this is the very equality the import
+      # identity is minted by.
+      shared = builtins.filter (n: fb.declared.imports ? ${n}) (builtins.attrNames fa.declared.imports);
       incompatible = builtins.filter (
-        n: differingFields fa.signature.imports.${n} fb.signature.imports.${n} != [ ]
+        n: differingFields fa.declared.imports.${n} fb.declared.imports.${n} != [ ]
       ) shared;
       mergedSig = {
         imports = fa.signature.imports // fb.signature.imports;
@@ -309,10 +356,10 @@ let
         blamed = party.declarers;
         witness = builtins.map (n: {
           name = n;
-          fields = differingFields fa.signature.imports.${n} fb.signature.imports.${n};
+          fields = differingFields fa.declared.imports.${n} fb.declared.imports.${n};
           origins = [
-            fa.signature.imports.${n}.origin
-            fb.signature.imports.${n}.origin
+            fa.declared.imports.${n}.origin
+            fb.declared.imports.${n}.origin
           ];
         }) incompatible;
       }
@@ -325,6 +372,7 @@ let
           imports = fa.declared.imports // fb.declared.imports;
           exports = fa.declared.exports // fb.declared.exports;
         };
+        importIdentities = fa.importIdentities // fb.importIdentities;
         bodies = fa.bodies ++ fb.bodies;
         crossings = prelude.unique (fa.crossings ++ fb.crossings);
         nodes = fa.nodes // fb.nodes;
@@ -383,27 +431,36 @@ let
     acc: f:
     andThen acc (
       g:
-      andThen (unionAlternative "ImportDecl" importCompareFields g.signature.imports f.signature.imports)
-        (
-          imports:
-          andThen (unionAlternative "ExportDecl" exportCompareFields g.signature.exports f.signature.exports)
-            (
-              exports:
-              ok (
-                g
-                // {
-                  signature = { inherit imports exports; };
-                  declared = { inherit imports exports; };
-                  bodies = g.bodies ++ f.bodies;
-                  crossings = prelude.unique (g.crossings ++ f.crossings);
-                  nodes = g.nodes // f.nodes;
-                  edges = {
-                    satisfiedBy = g.edges.satisfiedBy // f.edges.satisfiedBy;
-                  };
-                }
-              )
+      # Compared over the DECLARED imports, as `merge` compares them: a branch
+      # that has crossed a name keeps its declaration, and a differing one in a
+      # sibling branch is the same incompatibility.
+      andThen (unionAlternative "ImportDecl" importCompareFields g.declared.imports f.declared.imports) (
+        declaredImports:
+        andThen (unionAlternative "ExportDecl" exportCompareFields g.signature.exports f.signature.exports)
+          (
+            exports:
+            ok (
+              g
+              // {
+                signature = {
+                  imports = g.signature.imports // f.signature.imports;
+                  inherit exports;
+                };
+                declared = {
+                  imports = declaredImports;
+                  inherit exports;
+                };
+                importIdentities = g.importIdentities // f.importIdentities;
+                bodies = g.bodies ++ f.bodies;
+                crossings = prelude.unique (g.crossings ++ f.crossings);
+                nodes = g.nodes // f.nodes;
+                edges = {
+                  satisfiedBy = g.edges.satisfiedBy // f.edges.satisfiedBy;
+                };
+              }
             )
-        )
+          )
+      )
     );
 
   gate =
@@ -512,21 +569,27 @@ let
 
       missingProjection = builtins.filter (n: !(projection ? ${n})) satisfied;
 
-      # TAKEN-DEFAULT (the binding relatum's identity). §2.1 fixes the three
-      # relata and says each contributes "that relatum's identity"; it does not
-      # say what a BINDING's identity is, and §2.10's `Binding` carries no
-      # identity field. The default here is the binding's NAME WITHIN ITS SUPPLY,
-      # which is unique there by construction. Its visible consequence is
-      # deliberate and is content-independence, not a collision: two supplies
-      # binding the same name at the same target mint ONE crossing with
-      # contributions from both, which is exactly what §2.1 rules for two emitters
-      # presenting the same relata. It would need revisiting if a binding ever
-      # acquires an identity of its own.
+      # The IMPORT relatum is the import node's identity, fixed at `declare`; the
+      # import's NAME rides beside it as `name`, the identifier every name-keyed
+      # read below uses (ADR-0016 r5: identifier and identity are distinct).
+      #
+      # The TARGET relatum is `targetId` as the caller wrote it. This file holds
+      # no node set, so it cannot tell a target node's identity from a name, and
+      # a name is admitted SILENTLY; the door is the shared resolver's.
+      #
+      # PENDING OWNER READING (the binding relatum). §2.1 says each relatum
+      # contributes "that relatum's identity"; it does not say what a BINDING's
+      # identity is, §2.10's `Binding` carries no identity field, and the one
+      # mint refuses the sealed payloads (`Wrapped.body`, `Scoped.file`) a
+      # structural identity would need. Until that is read, the relatum is the
+      # binding's NAME WITHIN ITS SUPPLY, unique there by construction: two
+      # supplies binding the same name at the same target mint ONE crossing with
+      # contributions from both. This is a pending reading, not a default.
       nodeFor =
         n:
         andThen
           (mintIdentity hashIdentity "crossing" {
-            import = n;
+            import = fragment.importIdentities.${n};
             binding = n;
             target = targetId;
           })
@@ -534,7 +597,8 @@ let
             id:
             ok {
               inherit id;
-              import = n;
+              name = n;
+              import = fragment.importIdentities.${n};
               binding = n;
               target = targetId;
               staticityAdmissible = !(prelude.elem targetId (deltaLib.demands projection n));
@@ -689,7 +753,7 @@ let
         andThen (adapterLib.placement {
           inherit (node) staticityAdmissible deltaExact;
           inherit adapter;
-          name = node.import;
+          name = node.name;
         }) (p: ok (node // { placement = p; }));
 
       placed = builtins.map placementFor nodeList;
@@ -703,7 +767,7 @@ let
         r:
         r.value.placement.channel == adapterLib.channel.formals
         && r.value.placement.time == adapterLib.time.substrate;
-      substratePlacedNames = builtins.map (r: r.value.import) (builtins.filter substrateConsulted placed);
+      substratePlacedNames = builtins.map (r: r.value.name) (builtins.filter substrateConsulted placed);
 
       gateCheck =
         if fragment.gate == null then
@@ -804,7 +868,7 @@ let
   checkedValue =
     a: siblings: fragment: node:
     let
-      decl = fragment.declared.imports.${node.import};
+      decl = fragment.declared.imports.${node.name};
       v = substrateValue siblings node.record;
     in
     if decl.contract.__contractTerm == "Any" then
@@ -825,7 +889,7 @@ let
         ns:
         let
           results = builtins.map (n: {
-            name = n.import;
+            name = n.name;
             value = checkedValue a siblings fragment n;
           }) ns;
           bad = firstRefusal (builtins.map (r: r.value) results);
@@ -874,7 +938,7 @@ let
       #       rather than crossing unchecked.
       invokedGuard =
         let
-          contracted = n: fragment.declared.imports.${n.import}.contract.__contractTerm != "Any";
+          contracted = n: fragment.declared.imports.${n.name}.contract.__contractTerm != "Any";
           results = builtins.map (
             n:
             if n.record.__binding == "Wrapped" then
@@ -883,7 +947,7 @@ let
                   code = codes.valueNotObtainable;
                   blamed = party.supplier;
                   witness = {
-                    name = n.import;
+                    name = n.name;
                     constructor = "Wrapped";
                     reason = "a contract cannot be checked substrate-side on a target-time value";
                     missingCarrier = "ProducerScope";
@@ -893,7 +957,7 @@ let
                 ok null
             else
               andThen (substrateValue siblings n.record) (
-                v: if contracted n then a.interpret fragment.declared.imports.${n.import}.contract v else ok v
+                v: if contracted n then a.interpret fragment.declared.imports.${n.name}.contract v else ok v
               )
           ) invokedNodes;
           bad = firstRefusal results;
@@ -913,7 +977,7 @@ let
               code = codes.adapterMissingBindFormals;
               blamed = party.adapterSelector;
               witness = {
-                names = builtins.map (n: n.import) (substrateNodes ++ invokedNodes);
+                names = builtins.map (n: n.name) (substrateNodes ++ invokedNodes);
               };
             }
           else
@@ -928,7 +992,7 @@ let
                     targetArgs:
                     a.bindFormals (builtins.listToAttrs (
                       builtins.map (n: {
-                        name = n.import;
+                        name = n.name;
                         value = invokedValue targetArgs n;
                       }) invokedNodes
                     )) body1
@@ -967,19 +1031,19 @@ let
         witness = {
           object = "mkOperations";
           field = "hashIdentity";
-          expected = "kind -> [label] -> (label -> identity) -> CrossingId";
+          expected = "kind -> [label] -> (label -> InertValue) -> Identity";
           got = builtins.typeOf args.hashIdentity;
         };
       }
     else
       ok {
         inherit
-          declare
           merge
           gate
           close
           residue
           ;
+        declare = mkDeclare args.hashIdentity;
         link = mkLink args.hashIdentity;
       };
 in

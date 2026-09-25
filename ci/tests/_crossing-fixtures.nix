@@ -23,7 +23,7 @@ let
       kind
       + "@"
       + builtins.concatStringsSep "|" (
-        builtins.map (l: l + "=" + relatumOf l) (builtins.sort (a: b: a < b) labels)
+        builtins.map (l: l + "=" + builtins.toJSON (relatumOf l)) (builtins.sort (a: b: a < b) labels)
       )
     );
 

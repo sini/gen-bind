@@ -333,7 +333,7 @@ in
     # the digest rather than about the node.
     expr = builtins.listToAttrs (
       builtins.map (n: {
-        name = n.import;
+        name = n.name;
         value = {
           inherit (n) staticityAdmissible deltaExact;
         };
@@ -361,6 +361,7 @@ in
       "deltaExact"
       "id"
       "import"
+      "name"
       "origin"
       "record"
       "staticityAdmissible"
@@ -464,6 +465,157 @@ in
       in
       a.value == b.value;
     expected = true;
+  };
+
+  # ── the IMPORT relatum is the import node's IDENTITY (ADR-0016 r4), fixed at
+  #    `declare` over the declaration under `merge`'s own equality. Two
+  #    declarations sharing a name but differing in a compared field are two
+  #    imports, so they cross as two crossings; the same declaration crosses as one.
+  flake.tests.crossing-operations.test-distinct-import-declarations-mint-distinct-crossings = {
+    expr =
+      let
+        b = {
+          db = plainB "postgres";
+        };
+        ids =
+          decl:
+          (x.link "igloo" (proj b) (supply b) (x.declare (sig { db = decl; }) null).value).value.crossings;
+      in
+      ids (imp c.any) != ids (imp (c.prop "isString"));
+    expected = true;
+  };
+
+  flake.tests.crossing-operations.test-control-same-import-declaration-mints-one-crossing = {
+    expr =
+      let
+        b = {
+          db = plainB "postgres";
+        };
+        ids =
+          decl:
+          (x.link "igloo" (proj b) (supply b) (x.declare (sig { db = decl; }) null).value).value.crossings;
+      in
+      ids (imp c.any) == ids ((imp c.any) // { origin = "another-declarer"; });
+    expected = true;
+  };
+
+  flake.tests.crossing-operations.test-import-relatum-is-not-the-name = {
+    expr = builtins.filter (n: simpleImports ? ${n.import}) (nodesOf linkedFragment.value);
+    expected = [ ];
+  };
+
+  flake.tests.crossing-operations.test-declare-refuses-a-mistyped-compared-field = {
+    expr =
+      builtins.map
+        (
+          d:
+          (x.declare (sig {
+            db = (imp c.any) // d;
+          }) null).refusal.code or "admitted"
+        )
+        [
+          { satisfiedBy = ./.; }
+          { satisfiedBy = _: "igloo"; }
+          { required = "yes"; }
+          { sealed = null; }
+        ];
+    expected = [
+      "declaration-missing-field"
+      "declaration-missing-field"
+      "declaration-missing-field"
+      "declaration-missing-field"
+    ];
+  };
+
+  # `merge` and `gate` compare the DECLARED imports, not the residues: a name one
+  # side has already crossed keeps its declaration, so a differing re-declaration
+  # of it is refused in both orders, exactly as two unlinked declarations are.
+  # The last row is the control: an identical re-declaration is admitted.
+  flake.tests.crossing-operations.test-merge-refuses-a-differing-redeclaration-of-a-crossed-import = {
+    expr =
+      let
+        b = {
+          db = plainB "postgres";
+        };
+        declared = contract: (x.declare (sig { db = imp contract; }) null).value;
+        linkedA = (x.link "igloo" (proj b) (supply b) (declared c.any)).value;
+        unlinkedB = declared (c.prop "isString");
+      in
+      builtins.map (r: r.refusal.code or "admitted") [
+        (x.merge linkedA unlinkedB)
+        (x.merge unlinkedB linkedA)
+        (x.merge (declared c.any) unlinkedB)
+        (x.merge linkedA (declared c.any))
+      ];
+    expected = [
+      "merge-incompatibility"
+      "merge-incompatibility"
+      "merge-incompatibility"
+      "admitted"
+    ];
+  };
+
+  flake.tests.crossing-operations.test-gate-refuses-a-differing-redeclaration-of-a-crossed-import = {
+    expr =
+      let
+        b = {
+          db = plainB "postgres";
+        };
+        declared = contract: (x.declare (sig { db = imp contract; }) null).value;
+        linkedA = (x.link "igloo" (proj b) (supply b) (declared c.any)).value;
+        gated =
+          other:
+          x.gate {
+            enum = [
+              "a"
+              "b"
+            ];
+            select = x.selectTerm.literal "a";
+            branches = {
+              a = linkedA;
+              b = other;
+            };
+          };
+      in
+      builtins.map (r: r.refusal.code or "admitted") [
+        (gated (declared (c.prop "isString")))
+        (gated (declared c.any))
+      ];
+    expected = [
+      "merge-incompatibility"
+      "admitted"
+    ];
+  };
+
+  # A contract term's record is CLOSED per former: a key the algebra does not
+  # own, at any depth, is refused at `declare` by name rather than reaching the
+  # import node's mint. The last row is the control.
+  flake.tests.crossing-operations.test-declare-refuses-a-contract-key-its-former-does-not-own = {
+    expr = builtins.map (k: (x.declare (sig { db = imp k; }) null).refusal.code or "admitted") [
+      (c.any // { note = _: 1; })
+      (c.any // { note = ./.; })
+      (c.list (c.any // { note = _: 1; }))
+      (c.list c.any)
+    ];
+    expected = [
+      "contract-vocabulary"
+      "contract-vocabulary"
+      "contract-vocabulary"
+      "admitted"
+    ];
+  };
+
+  flake.tests.crossing-operations.test-declare-refuses-an-ill-typed-contract-field = {
+    expr = builtins.map (k: (x.declare (sig { db = imp k; }) null).refusal.code or "admitted") [
+      (c.prop (_: true))
+      (c.attrs "port")
+      (removeAttrs (c.prop "isString") [ "pred" ])
+    ];
+    expected = [
+      "contract-vocabulary"
+      "contract-vocabulary"
+      "contract-vocabulary"
+    ];
   };
 
   # A collapse oracle whose SEPARATING case is untested proves nothing: distinct
