@@ -129,6 +129,24 @@ The mechanism by which a substrate-resolved value enters an eval gen does not ow
 
 **Not exported**: `lib/module-convention.nix` (`setFunctionArgs`, `setDefaultModuleLocation`) is vendored byte-for-byte from nixpkgs and reachable only through `wrap`/`stripBindingArgs`/`wrapIdentity`.
 
+**`__` keys crossing the boundary** (R12 stated contracts; the census that reads these lines takes the
+first line of each):
+
+- `__configThunk` — writer `mkThunk` and `mkThunkFrom` (`lib/thunk.nix`), readers `isThunk` and the thunk expansion (same file):
+  marks a config thunk, carried unforced until a terminal supplies `config`.
+- `__fn` — writer `mkThunk` and `mkThunkFrom` (`lib/thunk.nix`), reader the thunk expansion (same file):
+  the closure a config thunk applies at its terminal, against that terminal's (or the producer's)
+  config.
+- `__bodyTerm` — writer the term formers (`lib/crossing-term.nix`), readers `isTerm`, `checkTerm` and the evaluators (`lib/crossing-term.nix`, `lib/crossing.nix`, `lib/crossing-delta.nix`):
+  the former tag of a body term (`Lit`, `ReadFrom`, `ReadCtx`, `If`, `Attrs`, `List`, `Concat`,
+  `PathJoin`, `Apply`).
+- `__crossingResult` — writer `ok` and `refuse` (`lib/crossing-refusal.nix`), readers `isResult`, `isOk` and `isRefusal` (same file):
+  the tag of the crossing result sum, `"ok"` or `"refusal"`.
+
+One foreign key is WRITTEN here: gen-view's carrier tag `__element`, as `"peerRelation"` for this
+library's own kind (`lib/crossing-adapter-set.nix`); gen-view states that contract and names this
+library on it.
+
 ## Entry points by task
 
 | Task                                                                  | Reach for                                                                                                                    |
