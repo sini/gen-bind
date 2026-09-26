@@ -74,10 +74,10 @@ let
 
   c = x.contractTerm;
 
-  inherit (genBind.crossing) injectAdapter mkSystemTerminal mkFlakeTerminal;
+  inherit (genBind.crossing) injectAdapter mkHostedTerminal mkFlakeTerminal;
 
   # ── the identity peer carriage (extent peer-read shape, Q5 Arm A) ────────────
-  # `mkSystemTerminal(...).adapter{...}` now requires `peerGraph`/`marksOf`/
+  # `mkHostedTerminal(...).adapter{...}` now requires `peerGraph`/`marksOf`/
   # `readerId` (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4,
   # Q4 RULED: never defaulted). None of the fixtures in this suite exercise
   # NARROWING — that is `crossing-extent-peer.nix`'s job — so every call site
@@ -179,7 +179,7 @@ let
       type = lib.types.str;
       default = "";
     };
-    # The system terminal's `bindFormals` carries the merge-collision validators
+    # The hosted terminal's `bindFormals` carries the merge-collision validators
     # (`.all`), and a validator DEFINES `warnings` — a target evaluation
     # receiving a crossed binding must declare the option, as NixOS-shaped
     # targets do. This fixture models that target contract.
@@ -251,7 +251,7 @@ let
     ];
   };
 
-  # ── the system terminal ──────────────────────────────────────────────────────
+  # ── the hosted terminal ──────────────────────────────────────────────────────
 
   classModule =
     { host, ... }:
@@ -269,7 +269,7 @@ let
     config.seenReached = "from-extraModules";
   };
 
-  systemTerminal = mkSystemTerminal {
+  hostedTerminal = mkHostedTerminal {
     evaluator = a: {
       config = {
         built = a.modules;
@@ -280,7 +280,7 @@ let
     class = "host";
   };
 
-  systemAdapter = systemTerminal.adapter (identityCarriage {
+  systemAdapter = hostedTerminal.adapter (identityCarriage {
     extent = {
       peer.config.addr = "10.0.0.2";
     };
@@ -302,7 +302,7 @@ let
   # cell in this suite entered its true branch: every carriage above omits the
   # field. A defect in that branch was invisible, and an equality taken over a
   # carriage that never carries one measures half the contract.
-  systemAdapterOwned = systemTerminal.adapter (identityCarriage {
+  systemAdapterOwned = hostedTerminal.adapter (identityCarriage {
     extent = {
       peer.config.addr = "10.0.0.2";
     };
@@ -323,7 +323,7 @@ let
     ];
   };
 
-  specialArgsOf = closed: (systemTerminal.locateConfig closed.value).specialArgs;
+  specialArgsOf = closed: (hostedTerminal.locateConfig closed.value).specialArgs;
   specialArgKeysOf =
     closed: builtins.sort builtins.lessThan (builtins.attrNames (specialArgsOf closed));
 
@@ -345,7 +345,7 @@ let
   targetArgsForPassthrough =
     passthrough:
     let
-      a = systemTerminal.adapter (identityCarriage {
+      a = hostedTerminal.adapter (identityCarriage {
         extent = {
           peer.config.addr = "10.0.0.2";
         };
@@ -386,12 +386,12 @@ let
         optionsModule
         peerReaderModule
       ]
-      ++ (systemTerminal.locateConfig closed.value).built;
+      ++ (hostedTerminal.locateConfig closed.value).built;
       specialArgs = specialArgsOf closed;
     };
 
   systemEval = lib.evalModules {
-    modules = [ optionsModule ] ++ (systemTerminal.locateConfig systemClosed.value).built;
+    modules = [ optionsModule ] ++ (hostedTerminal.locateConfig systemClosed.value).built;
   };
 
   # ── the flake terminal ───────────────────────────────────────────────────────
@@ -462,7 +462,7 @@ let
   collisionModules = [ classModule ];
 
   crossingPathModules =
-    (systemTerminal.adapter (identityCarriage {
+    (hostedTerminal.adapter (identityCarriage {
       extent = { };
       extraModules = [ ];
     })).bindFormals
@@ -488,7 +488,7 @@ let
   # Two terminals over the SAME crossing. The first's artifact HOLDS its config
   # at `.config`; the second's artifact IS the config — the shape the gen-aspects
   # demo terminal has, where `realized.<class>.<host>` is already the config.
-  dotConfigTerminal = mkSystemTerminal {
+  dotConfigTerminal = mkHostedTerminal {
     evaluator = a: {
       config = {
         built = a.modules;
@@ -498,7 +498,7 @@ let
     class = "host";
   };
 
-  isConfigTerminal = mkSystemTerminal {
+  isConfigTerminal = mkHostedTerminal {
     evaluator = a: {
       built = a.modules;
     };
@@ -536,13 +536,13 @@ let
   #
   # These three cells keep each opt-out declaration's GROUND measured, so a
   # declaration cannot outlive the fact it prices (spec §3 preamble). Built
-  # DIRECTLY against `mkSystemTerminal(...).adapter{...}.bindFormals` — one
+  # DIRECTLY against `mkHostedTerminal(...).adapter{...}.bindFormals` — one
   # level under the `pipeline`/`close` congruence machinery the cells above
   # exercise — because that is the altitude at which sites 2, 3 and 6 actually
   # execute; the value never visits `placement`'s Time/Channel decision on this
   # path (site 5 already covers that altitude, above).
   optoutSystemAdapter =
-    (mkSystemTerminal {
+    (mkHostedTerminal {
       evaluator = { modules, specialArgs }: lib.evalModules { inherit modules specialArgs; };
       locateConfig = c: c;
       class = "host";
@@ -588,7 +588,7 @@ let
   # different spec, a different oracle) — kept adjacent to O-1 instead, at the
   # same altitude, to read as its pair.
   optoutO2ThunkAdapter =
-    (mkSystemTerminal {
+    (mkHostedTerminal {
       evaluator = { modules, specialArgs }: lib.evalModules { inherit modules specialArgs; };
       locateConfig = c: c;
       class = "host";
@@ -936,7 +936,7 @@ in
   #    Without an arm like this the cell cannot distinguish "bound correctly"
   #    from "bound everywhere" — a value reaching the module that named it is
   #    equally consistent with an arg environment that reached every module in
-  #    the evaluation. The system terminal realizes `Formals` as `wrapAll`'s
+  #    the evaluation. The hosted terminal realizes `Formals` as `wrapAll`'s
   #    PARTIAL APPLICATION, so the binding must NOT appear in the target's arg
   #    environment; the inject adapter realizes it as an arg-environment WRITER,
   #    where it must. Same coordinate, two admissible constructions, and the two
@@ -964,10 +964,10 @@ in
   # `null`, so the `[TargetUnit]` argument is `[ ]` by construction.
   flake.tests.crossing-adapter-set.test-o-trm-1-extraModules-rides-the-closure-not-the-target-unit-list = {
     expr = {
-      appended = builtins.elem extraModule (systemTerminal.locateConfig systemClosed.value).built;
+      appended = builtins.elem extraModule (hostedTerminal.locateConfig systemClosed.value).built;
       # Four: the two body modules, the merge-collision validator `.all`
       # appends for the wrapped one, and the extra module.
-      count = builtins.length (systemTerminal.locateConfig systemClosed.value).built;
+      count = builtins.length (hostedTerminal.locateConfig systemClosed.value).built;
     };
     expected = {
       appended = true;
@@ -980,7 +980,7 @@ in
   # cannot count it. The cell asserts the residue rather than pretending it is
   # governed.
   flake.tests.crossing-adapter-set.test-o-trm-1-nodes-reaches-the-target-as-carriage-outside-the-governed-surface = {
-    expr = (systemTerminal.locateConfig systemClosed.value).specialArgs.nodes.peer.config.addr;
+    expr = (hostedTerminal.locateConfig systemClosed.value).specialArgs.nodes.peer.config.addr;
     expected = "10.0.0.2";
   };
 
@@ -1048,7 +1048,7 @@ in
   # exact set grew.
   flake.tests.crossing-adapter-set.test-o-name-1b-carriage-formals-carry-no-framework-name = {
     expr = builtins.sort builtins.lessThan (
-      builtins.attrNames (builtins.functionArgs systemTerminal.adapter)
+      builtins.attrNames (builtins.functionArgs hostedTerminal.adapter)
     );
     expected = [
       "extent"
@@ -1064,7 +1064,7 @@ in
   # identical to the row above.
   flake.tests.crossing-adapter-set.test-o-name-1b-control-nodes-absent-here-present-at-the-target = {
     expr = {
-      inCarriageFormals = builtins.functionArgs systemTerminal.adapter ? nodes;
+      inCarriageFormals = builtins.functionArgs hostedTerminal.adapter ? nodes;
       inTargetArgs = specialArgsOf systemClosed ? nodes;
     };
     expected = {
@@ -1296,7 +1296,7 @@ in
           optionsModule
           { _module.args.host = "from-the-module-system"; }
         ]
-        ++ (systemTerminal.locateConfig systemClosed.value).built;
+        ++ (hostedTerminal.locateConfig systemClosed.value).built;
       }).config.warnings;
     expected = [ "gen-bind: binding 'host' collision — bind-wins, module-system value shadowed" ];
   };

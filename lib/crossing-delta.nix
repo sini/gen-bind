@@ -63,7 +63,7 @@ let
   #
   # ★ UNCHANGED BY THE EXTENT PEER-READ SHAPE (Q5 Arm A,
   # specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2, §4.5). The
-  # peer relation `mkSystemTerminal(...).adapter{...}` now bounds and carries
+  # peer relation `mkHostedTerminal(...).adapter{...}` now bounds and carries
   # as `peerRelation` is a carriage residue — CLOSURE-borne, not a placed
   # `Binding` — exactly like `extent` was before it. This binding still sees
   # only `Termed` bindings' `ReadCtx` heads, so a peer-relation restriction

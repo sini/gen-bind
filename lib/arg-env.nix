@@ -111,7 +111,7 @@ in
   # caller-supplied `adapt` closure inside the nested `crossEval` fixpoint it
   # builds — mechanically the same shape as site 3's closure execution — but no
   # shipped Adapter offers a `bindArgEnv` position for it to be reached through:
-  # `injectAdapter`, `mkSystemTerminal` and `mkFlakeTerminal` all set
+  # `injectAdapter`, `mkHostedTerminal` and `mkFlakeTerminal` all set
   # `bindArgEnv = null` (crossing-adapter-set.nix), and no `lib/` binding in this
   # repo calls `configGate` at all — measured, a repo-wide search for callers
   # returns none. It is exported and reachable only by a CALLER building a

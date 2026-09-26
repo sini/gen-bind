@@ -10,7 +10,7 @@
     # TERMS AS gen-scope is for gen-view's own `ci/flake.nix`. O-1's oracle
     # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §3) is explicit:
     # "Wire the real `gen-delivery.realize` into the real `gen-bind`
-    # `mkSystemTerminal` adapter" — a hand-written fold in the test file would make
+    # `mkHostedTerminal` adapter" — a hand-written fold in the test file would make
     # every cell built on it an assertion about the fixture rather than about the
     # real class-major fold `realize` performs. `gen-delivery` itself declares ZERO
     # flake inputs (its `flake.nix` publishes `lib = import ./.;`, UNAPPLIED); its

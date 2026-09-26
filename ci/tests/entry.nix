@@ -21,7 +21,7 @@
 #   prelude — `buildSignature`'s `.bound` field is built by `prelude.genAttrs` over the bound
 #             argument names, so forcing it is what drives the call through gen-prelude rather than
 #             merely returning a record gen-bind assembled on its own.
-#   graph   — reached only through `genBind.crossing.mkSystemTerminal(...).adapter{...}`, which
+#   graph   — reached only through `genBind.crossing.mkHostedTerminal(...).adapter{...}`, which
 #             calls `graph.boundedBy`/`graph.forgetLabels` (ADR-0026's boundary-mark mechanism,
 #             reused) to bound the extent peer read; not forced by constructing `genBind` alone.
 #

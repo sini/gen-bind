@@ -15,7 +15,7 @@
 # ★ A `Body` IS WHATEVER ITS ADAPTER SAYS IT IS. The design of record enumerates
 # `Body` among the four opaque target-owned types and the substrate never reads
 # one, so each adapter below DEFINES its own — a module for `injectAdapter`, a
-# module LIST for `mkSystemTerminal`, a flake-module list for `mkFlakeTerminal`.
+# module LIST for `mkHostedTerminal`, a flake-module list for `mkFlakeTerminal`.
 # The substrate carries them and nothing more.
 #
 # ★★ WHY EACH CONSTRUCTOR RETURNS A `Terminal` RECORD `{ adapter, locateConfig }`
@@ -124,8 +124,8 @@ let
     thunkBindings = null;
   };
 
-  # ── the system terminal ──────────────────────────────────────────────────────
-  # The successor to gen-flake's `mkSystemTerminal`. It names no system class and
+  # ── the hosted terminal ──────────────────────────────────────────────────────
+  # The successor to the archived gen-flake's evaluator terminal. It names no system class and
   # touches no host builder: the `{ modules, specialArgs } -> artifact` evaluator
   # is the consumer's, threaded at TERMINAL CONSTRUCTION.
   #
@@ -228,7 +228,7 @@ let
   # (`crossing.nix`). The narrowing above was not wrong to keep the channel
   # shut for the five that remain; an execution authorization is not a
   # convenience member, and this is why it alone was reopened.
-  mkSystemTerminal =
+  mkHostedTerminal =
     {
       evaluator,
       locateConfig,
@@ -309,7 +309,7 @@ let
           # `elementOf` checks (`gen-view/lib/carrier.nix`), never an
           # attribute-name match, so a plain attrset with the right keys is
           # not accepted for it. Reachable SUBSTRATE-side, off the Adapter
-          # record `mkSystemTerminal(...).adapter{...}` returns — never
+          # record `mkHostedTerminal(...).adapter{...}` returns — never
           # spliced into `specialArgs` — because WHERE it reaches the
           # target-facing reader is Q2 (reduced to B vs C, spec §4.2) and this
           # construction picks neither arm.
@@ -321,7 +321,7 @@ let
           };
         in
         if unknownCarriageMembers != [ ] then
-          throw "gen-bind: mkSystemTerminal: adapter invoked with unrecognised carriage member(s) [ ${builtins.concatStringsSep " " unknownCarriageMembers} ] — accepted members are extent, extraModules, passthrough, thunkBindings, peerGraph, marksOf, readerId."
+          throw "gen-bind: mkHostedTerminal: adapter invoked with unrecognised carriage member(s) [ ${builtins.concatStringsSep " " unknownCarriageMembers} ] — accepted members are extent, extraModules, passthrough, thunkBindings, peerGraph, marksOf, readerId."
         else
           {
             inherit thunkBindings peerRelation;
@@ -400,7 +400,7 @@ let
                 inherit thunkBindings;
               }).all;
 
-            # No system-terminal name is target-invoked. A `false` congruence
+            # No hosted-terminal name is target-invoked. A `false` congruence
             # predicate meets `adapterMissingTargetInvoked` and is refused by name
             # rather than falling back to a channel that binds it at target time.
             bindArgEnv = null;
@@ -446,7 +446,7 @@ let
                     passthrough = carriage.passthrough or { };
                   in
                   if passthrough ? nodes then
-                    throw "gen-bind: mkSystemTerminal: the target-owned passthrough carries `nodes`, which this adapter emits itself — splicing it would silently replace the peer set. Rename that key in the passthrough."
+                    throw "gen-bind: mkHostedTerminal: the target-owned passthrough carries `nodes`, which this adapter emits itself — splicing it would silently replace the peer set. Rename that key in the passthrough."
                   else
                     { nodes = admittedExtent; } // passthrough;
               };
@@ -536,7 +536,7 @@ in
 {
   inherit
     injectAdapter
-    mkSystemTerminal
+    mkHostedTerminal
     mkFlakeTerminal
     ;
 }

@@ -30,7 +30,7 @@ in
 
   # ★★★ ADR-0023 (b) — POINTER DECLARATION, PARITY WITH `thunk.nix`'s. The full
   # four-part declaration for the crossing route this validator gets carried
-  # into lives at gen-bind `crossing-adapter-set.nix`'s `mkSystemTerminal`
+  # into lives at gen-bind `crossing-adapter-set.nix`'s `mkHostedTerminal`
   # collision-class header (write-list entry 1, SITE 2) — that is the SPLICING
   # POINT, where `bindFormals` returns `.all` (`mods ++ vals`) and this
   # validator lands in the target's own module set.

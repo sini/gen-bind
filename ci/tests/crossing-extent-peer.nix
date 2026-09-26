@@ -26,7 +26,7 @@
   ...
 }:
 let
-  inherit (genBind.crossing) mkSystemTerminal;
+  inherit (genBind.crossing) mkHostedTerminal;
 
   # ── the fixture, stated once (§3 "The fixture, stated once") ─────────────
   # Three-member class `host` over alpha/bravo/charlie, the complete peer
@@ -76,7 +76,7 @@ let
   # carriage (`{extent;extraModules;peerGraph;marksOf;readerId;
   # passthrough?;thunkBindings?;}`), so composing them needs a thin wrapper —
   # exactly what O-1's own instrument text asks for: "wire the real
-  # gen-delivery.realize into the real gen-bind mkSystemTerminal adapter",
+  # gen-delivery.realize into the real gen-bind mkHostedTerminal adapter",
   # composed in the probe file per §3's own protocol.
   mkGreenTerminal =
     {
@@ -85,7 +85,7 @@ let
       peerGraph,
     }:
     let
-      t = mkSystemTerminal {
+      t = mkHostedTerminal {
         inherit evaluator;
         locateConfig = x: x;
         class = "host";
@@ -150,7 +150,7 @@ let
     }) fixtureNodes
   );
 
-  greenSystemTerminal = mkSystemTerminal {
+  greenHostedTerminal = mkHostedTerminal {
     evaluator = a: builtins.attrNames a.specialArgs.nodes;
     locateConfig = x: x;
     class = "host";
@@ -158,7 +158,7 @@ let
 
   adapterFor =
     readerId:
-    greenSystemTerminal.adapter {
+    greenHostedTerminal.adapter {
       extent = extentForAdapterProbe;
       extraModules = [ ];
       inherit peerGraph;
