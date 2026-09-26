@@ -31,8 +31,16 @@ let
   #   - `specialArgs`   the caller-only arg env, available during imports resolution.
   #   - `moduleArgs`    a config-level `_module.args` env (null ⇒ omit; {} threads an empty env).
   #   - `absorb`        installs a freeform absorber (`types.lazyAttrsOf types.raw`) so an
-  #                     OPAQUE slice's config keys land regardless of the terminal type
-  #                     universe (nixpkgs / gen-merge). Default true.
+  #                     OPAQUE slice's config keys land regardless of the terminal's option
+  #                     vocabulary. Default true.
+  #
+  # `lib` here MUST be nixpkgs-shaped: the call two lines down is `lib.evalModules`, and that is
+  # the ONLY arm that exists — no other module-merge engine in this ecosystem has ever published
+  # an export under that name (only under `evalModuleTree`), so a `lib` bound to one would throw
+  # `attribute 'evalModules' missing` rather than run. Reaching nixpkgs' evaluator from here is
+  # BRIDGING, not a second engine (ADR-0008 §1: "a foreign module-system fixpoint reached across a
+  # boundary is bridging. No exception entry is owed"). A second arm here is unbuilt aspiration,
+  # not a regression — nothing in this repo's history ever called one.
   #
   # Laziness: `evalModules` builds config lazily; the RESULT is a WHNF attrset and no slice
   # config value is forced until `.config.<key>` is demanded.

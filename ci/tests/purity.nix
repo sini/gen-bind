@@ -384,4 +384,21 @@ in
     expr = map (s: s.name) (lib.filter (s: genPrelude.hasInfix "''" s.text) rawSources);
     expected = [ ];
   };
+
+  # arg-env.nix once documented `absorb` as polymorphic over a "nixpkgs / gen-merge" type
+  # universe. gen-merge has never published anything named `evalModules` (only
+  # `evalModuleTree`), so that second arm was aspiration from the file's first commit, never
+  # a built polymorphism — `crossEval`'s only call is `lib.evalModules`, reachable through
+  # nixpkgs alone. This reads `rawSources`, not the comment-stripped `sources`: the claim
+  # under repair lives entirely inside a comment, and `sources` is exactly the text
+  # `stripComments` has already removed it from, so a cell built against `sources` could
+  # never fire regardless of what the comment says.
+  flake.tests.purity.test-arg-env-doc-claims-no-unbuilt-gen-merge-arm = {
+    expr =
+      let
+        argEnv = lib.findFirst (s: s.name == "lib/arg-env.nix") null rawSources;
+      in
+      genPrelude.hasInfix "gen-merge" argEnv.text;
+    expected = false;
+  };
 }

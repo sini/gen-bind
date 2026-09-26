@@ -716,7 +716,7 @@ Resolves an **opaque** `module` through a fresh nested `evalModules` in the term
 
 - `specialArgs` — the caller-only arg env, available during imports resolution.
 - `moduleArgs` — a config-level `_module.args` env (`null` ⇒ omit; `{}` threads an empty env).
-- `absorb` — install a freeform absorber (`types.lazyAttrsOf types.raw`) so the opaque slice's config keys land regardless of the terminal type universe (nixpkgs / gen-merge). Default `true`.
+- `absorb` — install a freeform absorber (`types.lazyAttrsOf types.raw`) so the opaque slice's config keys land regardless of the terminal's option vocabulary. Default `true`.
 
 Laziness: `evalModules` builds config lazily; the result is a WHNF attrset and no slice config value is forced until `.config.<key>` is demanded.
 
