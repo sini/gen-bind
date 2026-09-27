@@ -30,7 +30,7 @@ in
       message = checked.message or "contract violation";
       blame = checked.blame or null;
     in
-    {
+    builtins.seq checked {
       __contract = true;
       inherit check message blame;
     };

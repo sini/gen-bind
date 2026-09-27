@@ -64,7 +64,7 @@
       boundArgNames = builtins.filter (k: bindings ? ${k}) argNames;
       fullVocabulary = if vocabulary == null then builtins.attrNames bindings else vocabulary;
     in
-    {
+    builtins.seq checked {
       requires = builtins.removeAttrs allArgs boundArgNames;
 
       bound = prelude.genAttrs boundArgNames (k: {

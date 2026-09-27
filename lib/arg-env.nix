@@ -87,15 +87,13 @@ in
   adaptArgs =
     argsRaw:
     let
-      inherit (prelude.checkRequired "gen-bind.adaptArgs" [ "adapt" "module" ] argsRaw)
-        adapt
-        module
-        ;
+      checked = prelude.checkRequired "gen-bind.adaptArgs" [ "adapt" "module" ] argsRaw;
+      inherit (checked) adapt module;
     in
-    args: {
+    builtins.seq checked (args: {
       imports = [ module ];
       _module.args = adapt args;
-    };
+    });
 
   # configGate — an eval-time `mkIf` gate over a slice's nested-eval'd CONFIG.
   #
@@ -156,7 +154,7 @@ in
       adapt = checked.adapt or (_: { });
       absorb = checked.absorb or true;
     in
-    args: {
+    builtins.seq checked (args: {
       config =
         args.lib.mkIf (gate args)
           (crossEval {
@@ -164,5 +162,5 @@ in
             inherit module absorb;
             moduleArgs = adapt args;
           }).config;
-    };
+    });
 }

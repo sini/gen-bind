@@ -235,18 +235,14 @@ let
   mkHostedTerminal =
     argsRaw:
     let
-      inherit
-        (prelude.checkRequired "gen-bind.crossing.mkHostedTerminal" [
-          "evaluator"
-          "locateConfig"
-          "class"
-        ] argsRaw)
-        evaluator
-        locateConfig
-        class
-        ;
+      checked = prelude.checkRequired "gen-bind.crossing.mkHostedTerminal" [
+        "evaluator"
+        "locateConfig"
+        "class"
+      ] argsRaw;
+      inherit (checked) evaluator locateConfig class;
     in
-    {
+    builtins.seq checked {
       inherit locateConfig;
 
       adapter =
@@ -525,7 +521,7 @@ let
       inherit (checked) evalFlakeModule inputs self;
       systems = checked.systems or [ ];
     in
-    {
+    builtins.seq checked {
       locateConfig = null;
 
       adapter = {
