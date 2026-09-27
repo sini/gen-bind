@@ -11,7 +11,21 @@
 }@args:
 let
   rootArgs = removeAttrs args [ "lib" ];
-  inherit (import ./.. (rootArgs // { wire = { deps, resolve }: deps; })) prelude;
+  inherit
+    (import ./.. (
+      rootArgs
+      // {
+        wire =
+          {
+            deps,
+            resolve,
+            lock,
+          }:
+          deps;
+      }
+    ))
+    prelude
+    ;
   genBind = import ./.. rootArgs;
 in
 { inherit lib prelude genBind; } // genBind
