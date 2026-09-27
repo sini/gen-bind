@@ -59,6 +59,25 @@ let
   unknownPin =
     door: accepted:
     pin door "'colr' is not an option of this door; the options are closed [(]accepted: ${accepted}[)] [(]in prelude[.]checkOptions[)]";
+  # `mkFlakeTerminal` moved to the NATIVE-ELLIPSIS class (den-hoag-7gp66, owner-ruled arm
+  # (C)): a missing required field is the evaluator's own refusal at the door's own
+  # application, not `prelude.checkRequired`'s throw, so it carries no door-name prefix
+  # and nix-unit classes it `TypeError` rather than `ThrownError` (measured,
+  # `nix-unit --flake .#testsError`, a control pinning the wrong `type` names the actual
+  # one). `unknownPin` above is unaffected — an unknown field still goes through
+  # `checkOptions`'s catchable throw.
+  #
+  # ★ NO TRAILING `$`. A `throw`'s own message is the whole final `error: ` section with
+  # nothing after it, which is why `pin` above anchors both ends. THIS error carries
+  # position info the evaluator attaches itself — an `at <file>:<line>:<col>:` trace plus
+  # a source snippet always follows on the next lines — so `gen-harness`'s `ci
+  # --tests-error` runner (`error-plane-runner.py`'s `errmsg`, which keeps every line
+  # after the last `error: ` marker, not just the first) never hands back a string a
+  # trailing `$` can match; measured red with it (`MSGMISS`), green without.
+  nativeMissingPin = fnName: field: {
+    type = "TypeError";
+    msg = "^function '${fnName}' called without required argument '${field}'";
+  };
 in
 {
   flake.tests = {
@@ -178,21 +197,21 @@ in
     };
 
     mkFlakeTerminal = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused (
-          (mkFlakeTerminal {
-            evalFlakeModule = a: m: {
-              config.flake = {
-                seen = a;
-                inherit (m) systems;
-              };
-            };
-            self = "s";
-          }).adapter.wrapUnit
-            [ ]
-            [ ]
-        );
-        expected = true;
+      # NATIVE-ELLIPSIS class (den-hoag-7gp66, owner-ruled arm (C)): `evalFlakeModule`/
+      # `inputs`/`self` are native required formals now, so a MISSING one is the
+      # evaluator's own uncatchable refusal at the door's own application — `tryEval`
+      # does not contain it (measured), so there is no `expected = true` this group can
+      # hold for that case without crashing the run. The byte-exact native message is
+      # pinned instead, below, in `flake.testsError.door-checks-mixed` — moved from
+      # catchable to native abort, not dropped.
+      test-functionArgs-names-the-required-and-optional-fields = {
+        expr = builtins.functionArgs mkFlakeTerminal;
+        expected = {
+          evalFlakeModule = false;
+          inputs = false;
+          self = false;
+          systems = true;
+        };
       };
       test-unknown-option-refused-catchably = {
         expr = refused (
@@ -478,22 +497,20 @@ in
         expectedError = unknownPin "gen-bind[.]resolveThunks" "'config', 'ctx', 'thunkArgNames', 'bindings', 'producerConfigs'";
       };
 
+      # Moved from catchable to native abort (arm (C)): `inputs` is a native required
+      # formal now, so its absence is the evaluator's own refusal at the door's own
+      # application — no `.adapter.wrapUnit` forcing needed to provoke it.
       test-mkFlakeTerminal-missing-field-named = {
-        expr =
-          (mkFlakeTerminal {
-            evalFlakeModule = a: m: {
-              config.flake = {
-                seen = a;
-                inherit (m) systems;
-              };
+        expr = mkFlakeTerminal {
+          evalFlakeModule = a: m: {
+            config.flake = {
+              seen = a;
+              inherit (m) systems;
             };
-            self = "s";
-          }).adapter.wrapUnit
-            [ ]
-            [ ];
-        expectedError =
-          missingPin "gen-bind[.]crossing[.]mkFlakeTerminal" "inputs"
-            "'evalFlakeModule', 'inputs', 'self'";
+          };
+          self = "s";
+        };
+        expectedError = nativeMissingPin "mkFlakeTerminal" "inputs";
       };
       test-mkFlakeTerminal-unknown-option-named = {
         expr =

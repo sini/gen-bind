@@ -500,62 +500,75 @@ let
   # config, and saying so visibly is what §2.3.3(b) requires of the field.
   # Door check (den-hoag-7gp66, P1 unit 7): `evalFlakeModule`/`inputs`/`self` required,
   # `systems` optional — a mixed door, closed overall (§v1.2).
+  #
+  # ★ NATIVE-ELLIPSIS CLASS (den-hoag-7gp66, owner-ruled arm (C), 2026-09-27): the hub's
+  # ADR-0035 vocabulary walk reads `builtins.functionArgs` of every published door
+  # (`ci/mkgenlibs-eval.nix`), and the `argsRaw:` shape this door held before hid
+  # `evalFlakeModule`/`inputs`/`self`/`systems` from that walk entirely — an opaque single
+  # formal reports no fields at all. The pattern goes back to NATIVE named formals with an
+  # `...` ellipsis, so `functionArgs` reads the same four fields (with the same required/
+  # defaulted split) it always could, and the accepted set for `checkOptions` is read off
+  # the pattern itself (`builtins.attrNames (builtins.functionArgs mkFlakeTerminal)`, gen-
+  # program 9c71820's idiom) rather than hand-copied. Two consequences fall out of going
+  # native rather than wrapping (den-hoag-bkdkg: a wrapper is detectable, it erases the
+  # formals a caller reads):
+  #   - a MISSING required field (`evalFlakeModule`/`inputs`/`self`) is now the evaluator's
+  #     own "called without required argument" refusal at THIS DOOR'S OWN APPLICATION,
+  #     before the body ever runs — stricter than the old `checkRequired` throw, and
+  #     UNCATCHABLE (`tryEval` does not contain it; measured, `nix-unit --flake .#testsError`
+  #     classes it `TypeError`, not the `ThrownError` a `prelude.checkRequired` throw is).
+  #     `ci/tests-error.nix`'s sibling (`door-checks.nix`'s own `testsError` group here) pins
+  #     the message; no `tests`-group boolean cell can hold this without crashing the run.
+  #   - an UNKNOWN field is still named and caught, exactly as before: `checkOptions` now
+  #     runs over the raw `args` at application (`builtins.seq` forces it ahead of the
+  #     returned attrset), so the refusal stays a catchable `throw`.
   mkFlakeTerminal =
-    argsRaw:
-    let
-      checked =
-        prelude.checkOptions "gen-bind.crossing.mkFlakeTerminal"
-          [
-            "evalFlakeModule"
-            "inputs"
-            "self"
-            "systems"
-          ]
-          (
-            prelude.checkRequired "gen-bind.crossing.mkFlakeTerminal" [
-              "evalFlakeModule"
-              "inputs"
-              "self"
-            ] argsRaw
-          );
-      inherit (checked) evalFlakeModule inputs self;
-      systems = checked.systems or [ ];
-    in
-    builtins.seq checked {
-      locateConfig = null;
+    {
+      evalFlakeModule,
+      inputs,
+      self,
+      systems ? [ ],
+      ...
+    }@args:
+    builtins.seq
+      (prelude.checkOptions "gen-bind.crossing.mkFlakeTerminal" (builtins.attrNames (
+        builtins.functionArgs mkFlakeTerminal
+      )) args)
+      {
+        locateConfig = null;
 
-      adapter = {
-        bindFormals = null;
-        bindArgEnv = null;
-        wrapFn = null;
+        adapter = {
+          bindFormals = null;
+          bindArgEnv = null;
+          wrapFn = null;
 
-        wrapUnit =
-          body: _units:
-          (evalFlakeModule
-            {
-              inputs = inputs // {
-                inherit self;
-              };
-            }
-            {
-              imports = body;
-              inherit systems;
-            }
-          ).config.flake;
+          wrapUnit =
+            body: _units:
+            (evalFlakeModule
+              {
+                inputs = inputs // {
+                  inherit self;
+                };
+              }
+              {
+                imports = body;
+                inherit systems;
+              }
+            ).config.flake;
 
-        inherit interpret;
+          inherit interpret;
 
-        # REQUIRED (§2.2 of the thunk-channel spec). §2.6's REVERSAL: the
-        # previous revision left this to the builder's judgment; the ground it
-        # gave (the §2.3.3(a) bar above) does not reach `thunkBindings` — that
-        # bar scopes to `bindFormals`/`bindArgEnv`/`wrapFn`/`extent`/`bindings`,
-        # the flake adapter's OFFERED POSITIONS, and `thunkBindings` is not in
-        # `fields` (`crossing-adapter.nix`), so it is not an offered position on
-        # the bar's own text. `bindFormals = null` above means nothing crosses
-        # and no thunk can be selected regardless of this value.
-        thunkBindings = null;
+          # REQUIRED (§2.2 of the thunk-channel spec). §2.6's REVERSAL: the
+          # previous revision left this to the builder's judgment; the ground it
+          # gave (the §2.3.3(a) bar above) does not reach `thunkBindings` — that
+          # bar scopes to `bindFormals`/`bindArgEnv`/`wrapFn`/`extent`/`bindings`,
+          # the flake adapter's OFFERED POSITIONS, and `thunkBindings` is not in
+          # `fields` (`crossing-adapter.nix`), so it is not an offered position on
+          # the bar's own text. `bindFormals = null` above means nothing crosses
+          # and no thunk can be selected regardless of this value.
+          thunkBindings = null;
+        };
       };
-    };
 in
 {
   inherit

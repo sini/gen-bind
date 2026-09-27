@@ -81,8 +81,23 @@ in
         expr = strictAtApplication mk { };
         expected = true;
       };
+      # `mkFlakeTerminal` moved to the NATIVE-ELLIPSIS class (den-hoag-7gp66, owner-ruled
+      # arm (C)): `evalFlakeModule`/`inputs`/`self` are native required formals now, so
+      # an EMPTY `bad` record aborts natively at the door's own call boundary — even
+      # stricter than this suite's own bar, but `strictAtApplication`'s `tryEval` cannot
+      # contain that refusal (measured: it escapes and crashes the run rather than
+      # returning `success = false`) — the byte-exact native abort is pinned instead in
+      # `door-checks.nix`'s `testsError` group. `bad` here carries all three required
+      # fields (dummy values) plus one unknown, so this cell keeps testing what it always
+      # tested for every other door: the `builtins.seq (checkOptions …) { … }` layer
+      # fires AT APPLICATION rather than waiting for a caller to force a returned field.
       test-crossingMkFlakeTerminal-strict-at-application = {
-        expr = strictAtApplication mkFlakeTerminal { };
+        expr = strictAtApplication mkFlakeTerminal {
+          evalFlakeModule = null;
+          inputs = null;
+          self = null;
+          colr = 1;
+        };
         expected = true;
       };
       test-crossingMkHostedTerminal-strict-at-application = {
