@@ -253,7 +253,12 @@ in
   # goes missing; this pins the text of every file that names the substrate.
   flake.tests.purity.test-scan-reads-are-live = {
     expr = liveReads;
+    # den-hoag-7gp66 P1 unit 7: `arg-env.nix`/`identity.nix`/`strip.nix` now take `prelude`
+    # (door checks via `prelude.checkOptions`/`checkRequired`), joining the live set; only
+    # `compose.nix` and `module-convention.nix` keep the `{ ... }:` signature that excludes
+    # them.
     expected = [
+      "lib/arg-env.nix"
       "lib/contract.nix"
       "lib/crossing-adapter-set.nix"
       "lib/crossing-adapter.nix"
@@ -265,9 +270,11 @@ in
       "lib/crossing-term.nix"
       "lib/crossing.nix"
       "lib/default.nix"
+      "lib/identity.nix"
       "lib/merge-strategy.nix"
       "lib/provenance.nix"
       "lib/signature.nix"
+      "lib/strip.nix"
       "lib/thunk.nix"
       "lib/wrap.nix"
       "flake.nix"
@@ -337,9 +344,12 @@ in
         lib.splitString "\n" (codeOf "lib/default.nix")
       );
     };
+    # den-hoag-7gp66 P1 unit 7: arg-env.nix now takes `prelude` (for the door checks) at
+    # its file boundary — still no NIXPKGS `lib`, which is what this invariant polices;
+    # `lib` itself remains runtime-threaded only (crossEval's own parameter).
     expected = {
-      signature = "{ ... }:";
-      callSites = [ "  argEnvLib = import ./arg-env.nix { };" ];
+      signature = "{ prelude }:";
+      callSites = [ "  argEnvLib = import ./arg-env.nix { inherit prelude; };" ];
     };
   };
 

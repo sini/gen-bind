@@ -67,14 +67,36 @@
   # the Adapter TYPE to carry a typed thunk channel — SITE-3's argued
   # impossibility under ADR-0013, not a scope limit on either record. See
   # `wrap.nix`'s `isThunkArg` for the full argument and O-1's measured ground.
+  # Door check (den-hoag-7gp66, P1 unit 7): `config`/`ctx`/`thunkArgNames`/`bindings`
+  # required, `producerConfigs` optional — a mixed door, closed overall (§v1.2).
   resolveThunks =
-    {
-      config,
-      ctx,
-      thunkArgNames,
-      bindings,
-      producerConfigs ? { },
-    }:
+    argsRaw:
+    let
+      checked =
+        prelude.checkOptions "gen-bind.resolveThunks"
+          [
+            "config"
+            "ctx"
+            "thunkArgNames"
+            "bindings"
+            "producerConfigs"
+          ]
+          (
+            prelude.checkRequired "gen-bind.resolveThunks" [
+              "config"
+              "ctx"
+              "thunkArgNames"
+              "bindings"
+            ] argsRaw
+          );
+      inherit (checked)
+        config
+        ctx
+        thunkArgNames
+        bindings
+        ;
+      producerConfigs = checked.producerConfigs or { };
+    in
     builtins.mapAttrs (
       k: v:
       if builtins.elem k thunkArgNames && builtins.isList v then

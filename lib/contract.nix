@@ -16,12 +16,20 @@ let
   provenanceLib = import ./provenance.nix { inherit prelude; };
 in
 {
+  # Door check (den-hoag-7gp66, P1 unit 7): `check` required, `message`/`blame` optional —
+  # a mixed door, closed overall (§v1.2).
   mk =
-    {
-      check,
-      message ? "contract violation",
-      blame ? null,
-    }:
+    argsRaw:
+    let
+      checked = prelude.checkOptions "gen-bind.contract.mk" [
+        "check"
+        "message"
+        "blame"
+      ] (prelude.checkRequired "gen-bind.contract.mk" [ "check" ] argsRaw);
+      inherit (checked) check;
+      message = checked.message or "contract violation";
+      blame = checked.blame or null;
+    in
     {
       __contract = true;
       inherit check message blame;

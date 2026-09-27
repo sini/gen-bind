@@ -19,7 +19,11 @@
 # nixpkgs-lib-free discipline (Class B): these primitives touch `evalModules`/`mkIf`/`types`
 # — but ONLY via a `lib` the TERMINAL threads in at the crossing (adaptArgs/configGate read
 # `args.lib`; crossEval takes `lib` as a parameter). gen-bind itself imports no `nixpkgs.lib`.
-{ ... }:
+#
+# Door checks (den-hoag-7gp66, P1 unit 7): `crossEval` and `configGate` are mixed doors
+# (§v1.2, closed overall); `adaptArgs` is a record door (open, R5). Every unknown field is
+# refused by name and catchably rather than aborting Nix's own uncatchable arity check.
+{ prelude }:
 let
   # crossEval — separate-compilation of an opaque slice in the TERMINAL's own evaluator.
   #
@@ -45,13 +49,20 @@ let
   # Laziness: `evalModules` builds config lazily; the RESULT is a WHNF attrset and no slice
   # config value is forced until `.config.<key>` is demanded.
   crossEval =
-    {
-      lib,
-      module,
-      specialArgs ? { },
-      moduleArgs ? null,
-      absorb ? true,
-    }:
+    argsRaw:
+    let
+      checked = prelude.checkOptions "gen-bind.crossEval" [
+        "lib"
+        "module"
+        "specialArgs"
+        "moduleArgs"
+        "absorb"
+      ] (prelude.checkRequired "gen-bind.crossEval" [ "lib" "module" ] argsRaw);
+      inherit (checked) lib module;
+      specialArgs = checked.specialArgs or { };
+      moduleArgs = checked.moduleArgs or null;
+      absorb = checked.absorb or true;
+    in
     lib.evalModules {
       inherit specialArgs;
       modules =
@@ -74,10 +85,13 @@ in
   # `specialArgs` is caller-only (see crossEval). Laziness: `adapt` and `module` are forced
   # only when the returned function is applied by `evalModules`, never at construction.
   adaptArgs =
-    {
-      adapt,
-      module,
-    }:
+    argsRaw:
+    let
+      inherit (prelude.checkRequired "gen-bind.adaptArgs" [ "adapt" "module" ] argsRaw)
+        adapt
+        module
+        ;
+    in
     args: {
       imports = [ module ];
       _module.args = adapt args;
@@ -130,12 +144,18 @@ in
   # `bindArgEnv` to this function on some future Adapter is a reach widening,
   # out of scope for a record that only prices what already exists.
   configGate =
-    {
-      gate,
-      module,
-      adapt ? (_: { }),
-      absorb ? true,
-    }:
+    argsRaw:
+    let
+      checked = prelude.checkOptions "gen-bind.configGate" [
+        "gate"
+        "module"
+        "adapt"
+        "absorb"
+      ] (prelude.checkRequired "gen-bind.configGate" [ "gate" "module" ] argsRaw);
+      inherit (checked) gate module;
+      adapt = checked.adapt or (_: { });
+      absorb = checked.absorb or true;
+    in
     args: {
       config =
         args.lib.mkIf (gate args)

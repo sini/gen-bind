@@ -181,13 +181,24 @@ let
   #
   # ★ This is a per-binding CLASSIFICATION READ of one recorded attribute. There
   # is no traversal here and it must not become cycle detection.
+  # Door check (den-hoag-7gp66, P1 unit 7): `staticityAdmissible`/`deltaExact`/`adapter`/
+  # `name` all required — a record door (§v1.2), open (R5).
   placement =
-    {
-      staticityAdmissible,
-      deltaExact,
-      adapter,
-      name,
-    }:
+    argsRaw:
+    let
+      inherit
+        (prelude.checkRequired "gen-bind.crossing.placement" [
+          "staticityAdmissible"
+          "deltaExact"
+          "adapter"
+          "name"
+        ] argsRaw)
+        staticityAdmissible
+        deltaExact
+        adapter
+        name
+        ;
+    in
     if staticityAdmissible then
       if deltaExact != "EXACT" then
         refuse {

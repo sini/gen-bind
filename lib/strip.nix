@@ -9,17 +9,21 @@
 # advertised interface to match reality. (Currying / residual arity is lambda
 # calculus, not a specific Reynolds 1972 section — §4 is Abstract Syntax; the
 # paper's only partial-application artifact is §6's EQ2 record.)
-{ ... }:
+# Door check (den-hoag-7gp66, P1 unit 7): `module`/`bindingNames` both required — a
+# record door (§v1.2), open (R5): an extra field is admitted, a missing one refused
+# by name and catchably.
+{ prelude }:
 let
   moduleConvention = import ./module-convention.nix { };
 in
 {
   stripBindingArgs =
-    {
-      module,
-      bindingNames,
-    }:
+    argsRaw:
     let
+      inherit (prelude.checkRequired "gen-bind.stripBindingArgs" [ "module" "bindingNames" ] argsRaw)
+        module
+        bindingNames
+        ;
       isWrappedAttrset = builtins.isAttrs module && module ? __functionArgs;
       rawArgs =
         if isWrappedAttrset then

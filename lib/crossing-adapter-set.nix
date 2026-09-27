@@ -228,12 +228,24 @@ let
   # (`crossing.nix`). The narrowing above was not wrong to keep the channel
   # shut for the five that remain; an execution authorization is not a
   # convenience member, and this is why it alone was reopened.
+  # Door check (den-hoag-7gp66, P1 unit 7): `evaluator`/`locateConfig`/`class` all required
+  # — a record door (§v1.2), open (R5). The nested `.adapter` function returned below is a
+  # depth-3 construct with its own pre-existing, hand-rolled catchable check
+  # (`unknownCarriageMembers`) and is out of scope for this unit's top-level census.
   mkHostedTerminal =
-    {
-      evaluator,
-      locateConfig,
-      class,
-    }:
+    argsRaw:
+    let
+      inherit
+        (prelude.checkRequired "gen-bind.crossing.mkHostedTerminal" [
+          "evaluator"
+          "locateConfig"
+          "class"
+        ] argsRaw)
+        evaluator
+        locateConfig
+        class
+        ;
+    in
     {
       inherit locateConfig;
 
@@ -490,13 +502,29 @@ let
   #
   # `locateConfig = null` — a flake terminal produces outputs, not an evaluated
   # config, and saying so visibly is what §2.3.3(b) requires of the field.
+  # Door check (den-hoag-7gp66, P1 unit 7): `evalFlakeModule`/`inputs`/`self` required,
+  # `systems` optional — a mixed door, closed overall (§v1.2).
   mkFlakeTerminal =
-    {
-      evalFlakeModule,
-      inputs,
-      self,
-      systems ? [ ],
-    }:
+    argsRaw:
+    let
+      checked =
+        prelude.checkOptions "gen-bind.crossing.mkFlakeTerminal"
+          [
+            "evalFlakeModule"
+            "inputs"
+            "self"
+            "systems"
+          ]
+          (
+            prelude.checkRequired "gen-bind.crossing.mkFlakeTerminal" [
+              "evalFlakeModule"
+              "inputs"
+              "self"
+            ] argsRaw
+          );
+      inherit (checked) evalFlakeModule inputs self;
+      systems = checked.systems or [ ];
+    in
     {
       locateConfig = null;
 

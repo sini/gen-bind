@@ -9,7 +9,7 @@ let
   stripLib = import ./strip.nix { inherit prelude; };
   signatureLib = import ./signature.nix { inherit prelude; };
   wrapLib = import ./wrap.nix { inherit prelude; };
-  argEnvLib = import ./arg-env.nix { };
+  argEnvLib = import ./arg-env.nix { inherit prelude; };
   crossingLib = import ./crossing.nix { inherit prelude graph; };
 in
 {

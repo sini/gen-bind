@@ -113,13 +113,19 @@ let
   # which needs the whole pipeline and so lives with the other close cells.
   traversable = c: (c.record.mark or bindingLib.mark.open) != bindingLib.mark.floor;
 
+  # Door check (den-hoag-7gp66, P1 unit 7): `unit`/`crossings`/`projection` all required —
+  # a record door (§v1.2), open (R5). `linked` (below) forwards its argument to this
+  # function unmodified, so it inherits the same catchable, named refusal by delegation
+  # rather than a check of its own.
   environment =
-    {
-      unit,
-      crossings,
-      projection,
-    }:
+    argsRaw:
     let
+      inherit
+        (prelude.checkRequired "gen-bind.crossing.environment" [ "unit" "crossings" "projection" ] argsRaw)
+        unit
+        crossings
+        projection
+        ;
       demanded = builtins.concatMap (c: deltaLib.demands projection c.binding) (
         builtins.filter traversable crossings
       );
@@ -128,14 +134,23 @@ let
 
   linked = args: environment args == [ ];
 
+  # Door check (den-hoag-7gp66, P1 unit 7): `unit`/`crossings`/`projection`/`linkset` all
+  # required — a record door (§v1.2), open (R5).
   coherence =
-    {
-      unit,
-      crossings,
-      projection,
-      linkset,
-    }:
+    argsRaw:
     let
+      inherit
+        (prelude.checkRequired "gen-bind.crossing.coherence" [
+          "unit"
+          "crossings"
+          "projection"
+          "linkset"
+        ] argsRaw)
+        unit
+        crossings
+        projection
+        linkset
+        ;
       e = environment { inherit unit crossings projection; };
       offending = builtins.filter (t: !(prelude.elem t linkset.members)) e;
     in

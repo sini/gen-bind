@@ -20,23 +20,45 @@
 # (what gen-bind provided), `requires` = imports (what evalModules must fill).
 { prelude }:
 {
+  # Door check (den-hoag-7gp66, P1 unit 7): `module`/`bindings`/`defaultMergeStrategy`/
+  # `mergeStrategies` required, `provenance`/`vocabulary` optional — a mixed door, closed
+  # overall (§v1.2).
+  #
+  # `vocabulary`: the vocabulary a CALLER declares it may supply, which can be broader
+  # than the bindings actually provided at this specific wrap site (e.g. a layered
+  # composition where a later stage covers the rest). Default is the standard API: no
+  # separate vocabulary, so it collapses to `bindings`' own keys and inVocabulary ==
+  # isBound for every key — unsatisfied is honestly [] because nothing outside bindings
+  # was ever declared as forthcoming.
   buildSignature =
-    {
-      module,
-      bindings,
-      defaultMergeStrategy,
-      mergeStrategies,
-      provenance ? { },
-      # The vocabulary a CALLER declares it may supply, which can be broader
-      # than the bindings actually provided at this specific wrap site (e.g.
-      # a layered composition where a later stage covers the rest). Default
-      # is the standard API: no separate vocabulary, so it collapses to
-      # `bindings`' own keys and inVocabulary == isBound for every key —
-      # unsatisfied is honestly [] because nothing outside bindings was ever
-      # declared as forthcoming.
-      vocabulary ? null,
-    }:
+    argsRaw:
     let
+      checked =
+        prelude.checkOptions "gen-bind.buildSignature"
+          [
+            "module"
+            "bindings"
+            "defaultMergeStrategy"
+            "mergeStrategies"
+            "provenance"
+            "vocabulary"
+          ]
+          (
+            prelude.checkRequired "gen-bind.buildSignature" [
+              "module"
+              "bindings"
+              "defaultMergeStrategy"
+              "mergeStrategies"
+            ] argsRaw
+          );
+      inherit (checked)
+        module
+        bindings
+        defaultMergeStrategy
+        mergeStrategies
+        ;
+      provenance = checked.provenance or { };
+      vocabulary = checked.vocabulary or null;
       allArgs = if builtins.isFunction module then builtins.functionArgs module else { };
       argNames = builtins.attrNames allArgs;
       boundArgNames = builtins.filter (k: bindings ? ${k}) argNames;

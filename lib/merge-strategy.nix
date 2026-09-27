@@ -49,12 +49,22 @@ in
   # declaration for the full argument and O-3's measured ground.
   #
   # Academic: Findler 2002 §2.2 — blame assignment at collision detection.
+  # Door check (den-hoag-7gp66, P1 unit 7): `resolvePolicy`/`boundArgNames`/`provenance` all
+  # required — a record door (§v1.2), open (R5).
   mkMergeValidator =
-    {
-      resolvePolicy,
-      boundArgNames,
-      provenance,
-    }:
+    argsRaw:
+    let
+      inherit
+        (prelude.checkRequired "gen-bind.mkMergeValidator" [
+          "resolvePolicy"
+          "boundArgNames"
+          "provenance"
+        ] argsRaw)
+        resolvePolicy
+        boundArgNames
+        provenance
+        ;
+    in
     moduleArgs:
     let
       checks = builtins.concatMap (
