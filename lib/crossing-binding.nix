@@ -65,20 +65,22 @@ let
     tag: m: build:
     if !(builtins.isString m) || !(prelude.elem m marks) then markRefusal tag m else build;
 
-  # The four constructors are `prelude.door`s over a CLOSED record whose fields are all required
-  # (den-hoag-ekum1): a missing or misspelt field is refused by name and catchably, where the native
-  # closed formal each replaces aborted uncatchably (ADR-0025 item 1). Closed, not R5's open record:
-  # a constructor's field set is its declaration, and an unknown field is a mistake, not extension
-  # data — the posture of `prelude.resolve`'s registry step.
+  # The four constructors are `prelude.door`s over R5's data record (den-hoag-ekum1): open, every
+  # field required, as gen-bind's other required-record doors are. A missing field, and so a
+  # misspelt one (every field is required, so `vaule` in place of `value` leaves `value` missing), is
+  # refused by name and catchably, where the native closed formal each replaces aborted uncatchably
+  # (ADR-0025 item 1). A field no constructor names is admitted, R5's stated price, so each body
+  # behind its door takes `...`: the door has already checked the required fields.
   constructor =
     tag: required:
     prelude.door {
       name = "gen-bind.crossing.binding.${tag}";
       inherit required;
+      open = true;
     };
 
   plain = constructor "plain" [ "value" "mark" ] (
-    { value, mark }:
+    { value, mark, ... }:
     guardMark "Plain" mark {
       __binding = "Plain";
       inherit value mark;
@@ -86,7 +88,7 @@ let
   );
 
   termed = constructor "termed" [ "term" "mark" ] (
-    { term, mark }:
+    { term, mark, ... }:
     guardMark "Termed" mark (
       if isRefusal term then
         term
@@ -104,6 +106,7 @@ let
       scope,
       producer,
       mark,
+      ...
     }:
     guardMark "Scoped" mark {
       __binding = "Scoped";
@@ -124,6 +127,7 @@ let
       producer,
       body,
       mark,
+      ...
     }:
     guardMark "Wrapped" mark (
       if !(builtins.isFunction body) then

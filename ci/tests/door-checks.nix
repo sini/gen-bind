@@ -14,8 +14,9 @@
 #   - a record behind an options step refuses each of that step's own names (`optionsStep`, G10)
 #   - every step publishes its row as its contract, as data and through the functor-aware reader (D3)
 #   - a non-default option reaches the partially applied door and moves the answer (G3)
-#   - a CLOSED record step (den-hoag-ekum1) admits its good record, and refuses a misspelt field, a
-#     missing one and a non-attrset — each of which its native closed formal aborted on uncatchably
+#   - a record whose row carries `typo` refuses that misspelling written in place of a field (den-hoag-ekum1)
+#   - a CLOSED record step (den-hoag-ekum1) admits its good record, and refuses a field outside its closed
+#     set and a non-attrset — each of which its native closed formal aborted on uncatchably
 #
 # `tests` pins what each step ADMITS/REFUSES and that every refusal is catchable; `testsError` pins
 # WHICH refusal fired and that it names the door first (R6).
@@ -35,8 +36,7 @@ let
   each = f: builtins.mapAttrs (_: f);
   flag = v: names: lib.genAttrs names (_: v);
   guarded = lib.filterAttrs (_: r: r ? guardedBy) F.records;
-  published = lib.filterAttrs (_: r: r.published) F.closed;
-  dropping = lib.filterAttrs (_: r: r.drop != null) F.closed;
+  misspellable = lib.filterAttrs (_: r: r ? typo) F.records;
 
   # Every options door on the published surface (depth <= 2), read off its `__contract` rather than
   # a hand list, so a new one is seen whether or not a row was written for it.
@@ -85,6 +85,12 @@ let
         expectedError = pin key "the argument must be an attrset, not a int ${req}";
       };
     }
+    // lib.optionalAttrs (row ? typo) {
+      "test-${key}-misspelt-field-message" = {
+        expr = row.step (builtins.removeAttrs row.good [ row.drop ] // { ${row.typo} = 1; });
+        expectedError = pin key "required field '${row.drop}' is missing ${req}";
+      };
+    }
     // lib.optionalAttrs (row ? guardedBy) (
       let
         o = builtins.head F.options.${row.guardedBy}.optional;
@@ -96,22 +102,12 @@ let
         };
       }
     );
-  closedGoldens =
-    key: row:
-    {
-      "test-${key}-misspelt-field-message" = {
-        expr = row.step (row.good // { ${row.typo} = 1; });
-        expectedError = pin key "'${row.typo}' is not an option of this door; the options are closed [(]accepted: ${
-          quoted (row.accepted or row.required)
-        }[)] [(]in prelude[.]checkOptions[)]";
-      };
-    }
-    // lib.optionalAttrs (row.drop != null) {
-      "test-${key}-missing-required-field-message" = {
-        expr = row.step (builtins.removeAttrs row.good [ row.drop ]);
-        expectedError = pin key "required field '${row.drop}' is missing [(]required: ${quoted row.required}[)] [(]in prelude[.]checkRequired[)]";
-      };
+  closedGoldens = key: row: {
+    "test-${key}-extra-field-message" = {
+      expr = row.step (row.good // { ${row.extra} = 1; });
+      expectedError = pin key "'${row.extra}' is not an option of this door; the options are closed [(]accepted: ${quoted row.accepted}[)] [(]in prelude[.]checkOptions[)]";
     };
+  };
 in
 {
   flake.tests.door-checks = {
@@ -157,15 +153,13 @@ in
           "wrapAll"
           "wrapIdentity"
         ];
-        closed = [
-          "composeWith"
+        closed = [ "composeWith" ];
+        records = [
+          "buildSignature"
           "crossing.binding.plain"
           "crossing.binding.scoped"
           "crossing.binding.termed"
           "crossing.binding.wrapped"
-        ];
-        records = [
-          "buildSignature"
           "crossing.coherence"
           "crossing.environment"
           "crossing.linked"
@@ -292,41 +286,27 @@ in
         functionArgs = flag false d.required;
       }) F.records;
     };
-    # den-hoag-ekum1: the closed record steps. Each refusal below was an UNCATCHABLE abort under the
-    # native closed formal (`called with unexpected argument` / `called without required argument`).
+    # den-hoag-ekum1: each refusal below was an UNCATCHABLE abort under the native closed formal
+    # (`called with unexpected argument` / `called without required argument`). A misspelling written
+    # IN PLACE of a required field leaves that field missing, so an open record refuses it.
+    test-a-misspelling-in-place-of-a-field-is-refused-catchably-at-every-record-step = {
+      expr = each (
+        d: applied d.step (builtins.removeAttrs d.good [ d.drop ] // { ${d.typo} = 1; })
+      ) misspellable;
+      expected = each (_: false) misspellable;
+    };
+    # The closed steps' closure oracle: a field outside the closed set, beside good ones, is refused.
     test-the-good-record-is-admitted-at-every-closed-step = {
       expr = each (d: applied d.step d.good) F.closed;
       expected = each (_: true) F.closed;
     };
-    test-a-misspelt-field-is-refused-catchably-at-every-closed-step = {
-      expr = each (d: applied d.step (d.good // { ${d.typo} = 1; })) F.closed;
+    test-an-extra-field-is-refused-catchably-at-every-closed-step = {
+      expr = each (d: applied d.step (d.good // { ${d.extra} = 1; })) F.closed;
       expected = each (_: false) F.closed;
-    };
-    test-a-misspelling-in-place-of-a-field-is-refused-catchably = {
-      expr = each (
-        d: applied d.step (builtins.removeAttrs d.good [ d.drop ] // { ${d.typo} = 1; })
-      ) dropping;
-      expected = each (_: false) dropping;
-    };
-    test-a-missing-field-is-refused-catchably-at-every-closed-step = {
-      expr = each (d: applied d.step (builtins.removeAttrs d.good [ d.drop ])) dropping;
-      expected = each (_: false) dropping;
     };
     test-a-non-attrset-record-is-refused-catchably-at-every-closed-step = {
       expr = each (d: applied d.step 1) F.closed;
       expected = each (_: false) F.closed;
-    };
-    test-every-published-closed-step-publishes-the-row-as-its-contract = {
-      expr = each (d: {
-        inherit (d.step.__contract) required optional open;
-        functionArgs = prelude.functionArgs d.step;
-      }) published;
-      expected = each (d: {
-        inherit (d) required;
-        optional = [ ];
-        open = false;
-        functionArgs = flag false d.required;
-      }) published;
     };
   };
 

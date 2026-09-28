@@ -437,7 +437,7 @@ reg.value.projection.opaque      # { targets = [ "iceberg" ]; exact = "APPROX"; 
 | `scoped { file; scope; producer; mark; }` | P-B, the file-loaded body         | `{producer}`, complete on the caller-lexical channel only — the `import` channel is measured open     |
 | `wrapped { producer; body; mark; }`       | P-C, the foreign lambda           | `{producer}`, an **under-approximation**: application bounds the argument channel and nothing lexical |
 
-Each constructor's record is closed and every field is required. A misspelt or missing field is refused by name and catchably, naming the constructor (`gen-bind.crossing.binding.plain: required field 'mark' is missing …`).
+Each constructor's record is an open data record (R5) whose fields are all required. A missing field, or a misspelling written in its place, is refused by name and catchably, naming the constructor (`gen-bind.crossing.binding.plain: required field 'mark' is missing …`).
 
 `Termed` is **not** a restriction on the authoring language. An author builds the term with ordinary Nix — `map`, `listToAttrs`, computed attribute names — and all of that runs at term-construction time, leaving a term whose keys and read paths are literal by the time the analysis runs.
 

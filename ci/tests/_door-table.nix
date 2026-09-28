@@ -10,13 +10,13 @@
 # options step — `guardedBy`, the options row whose names the record refuses (`optionsStep`, G10).
 # `step good` must answer: that is each row's live control.
 #
-# A CLOSED record step (den-hoag-ekum1) is a record whose field set is a declaration, so an unknown
-# field is refused rather than admitted: a row is the step as applied, its `required` fields, a
-# `good` record, the field `drop` removes (null when every field is optional), and `typo`, a
-# misspelling of one of its fields (`accepted` names the closed set where it is not `required`).
-# `published` marks a step that is itself a published door, whose contract `door-checks.nix` reads;
-# `composeWith`'s layer is a door behind a positional list, so it is reached through
-# `composeWith [ layer ]`.
+# A record row may also carry `typo`, a misspelling of `drop` written IN PLACE of it: every field
+# of such a record is required, so the misspelling leaves `drop` missing and an open door refuses it.
+#
+# A CLOSED record step (den-hoag-ekum1) has only optional fields, so a misspelling is an unknown field
+# and only closure refuses it: a row is the step as applied, a `good` record, `extra`, a field outside
+# the closed set, and `accepted`, that set. `composeWith`'s layer is the one, a door behind a
+# positional list, so it is reached through `composeWith [ layer ]`.
 #
 # The positional doors (`adaptArgs`, `stripBindingArgs`) carry no row: their arity is structural and
 # they have no field check.
@@ -272,26 +272,8 @@ in
       };
       drop = "class";
     };
-  };
-
-  closed = {
-    composeWith = {
-      step = layer: genBind.composeWith [ layer ];
-      published = false;
-      required = [ ];
-      good.bindings.v = 1;
-      drop = null;
-      typo = "bindngs";
-      accepted = [
-        "bindings"
-        "provenance"
-        "contracts"
-        "mergeStrategies"
-      ];
-    };
     "crossing.binding.plain" = {
       step = binding.plain;
-      published = true;
       required = [
         "value"
         "mark"
@@ -300,12 +282,11 @@ in
         value = 1;
         mark = "Floor";
       };
-      drop = "mark";
+      drop = "value";
       typo = "vaule";
     };
     "crossing.binding.termed" = {
       step = binding.termed;
-      published = true;
       required = [
         "term"
         "mark"
@@ -319,7 +300,6 @@ in
     };
     "crossing.binding.scoped" = {
       step = binding.scoped;
-      published = true;
       required = [
         "file"
         "scope"
@@ -337,7 +317,6 @@ in
     };
     "crossing.binding.wrapped" = {
       step = binding.wrapped;
-      published = true;
       required = [
         "producer"
         "body"
@@ -350,6 +329,20 @@ in
       };
       drop = "body";
       typo = "bdoy";
+    };
+  };
+
+  closed = {
+    composeWith = {
+      step = layer: genBind.composeWith [ layer ];
+      good.bindings.v = 1;
+      extra = "bindngs";
+      accepted = [
+        "bindings"
+        "provenance"
+        "contracts"
+        "mergeStrategies"
+      ];
     };
   };
 }
