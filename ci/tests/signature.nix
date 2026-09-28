@@ -28,9 +28,9 @@ let
   };
   # The signature of `cfg` through all three publishing routes.
   sigsOf = cfg: {
-    wrap = (genBind.wrap ({ module = collideMod; } // cfg)).signature;
-    wrapAll = builtins.head (genBind.wrapAll ({ modules = [ collideMod ]; } // cfg)).signatures;
-    buildSignature = buildSignature {
+    wrap = (genBind.wrap cfg collideMod).signature;
+    wrapAll = builtins.head (genBind.wrapAll cfg [ collideMod ]).signatures;
+    buildSignature = buildSignature { } {
       module = collideMod;
       inherit (cfg) bindings;
       defaultMergeStrategy = "bind-wins";
@@ -41,7 +41,7 @@ let
     cfg:
     let
       v =
-        ((genBind.wrap ({ module = collideMod; } // cfg)).module {
+        ((genBind.wrap cfg collideMod).module {
           a = "SYSTEM";
           config = { };
         }).out;
@@ -128,7 +128,7 @@ in
   flake.tests.signature.test-basic-structure = {
     expr =
       let
-        sig = buildSignature {
+        sig = buildSignature { } {
           module =
             {
               host,
@@ -165,7 +165,7 @@ in
   flake.tests.signature.test-optional-arg-marked = {
     expr =
       let
-        sig = buildSignature {
+        sig = buildSignature { } {
           module =
             {
               host ? null,
@@ -189,7 +189,7 @@ in
   flake.tests.signature.test-merge-strategies-populated = {
     expr =
       let
-        sig = buildSignature {
+        sig = buildSignature { } {
           module =
             {
               host,
@@ -225,27 +225,31 @@ in
   flake.tests.signature.test-unsatisfied-reports-missing-vocabulary-key = {
     expr =
       let
-        sig = buildSignature {
-          module =
+        sig =
+          buildSignature
             {
-              host,
-              user,
-              config,
-              ...
-            }:
-            { };
-          bindings = {
-            host = {
-              name = "igloo";
+              vocabulary = [
+                "host"
+                "user"
+              ];
+            }
+            {
+              module =
+                {
+                  host,
+                  user,
+                  config,
+                  ...
+                }:
+                { };
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+              };
+              defaultMergeStrategy = "bind-wins";
+              mergeStrategies = { };
             };
-          };
-          defaultMergeStrategy = "bind-wins";
-          mergeStrategies = { };
-          vocabulary = [
-            "host"
-            "user"
-          ];
-        };
       in
       sig.unsatisfied;
     expected = [ "user" ];
@@ -254,30 +258,34 @@ in
   flake.tests.signature.test-control-fully-satisfied-vocabulary-stays-empty = {
     expr =
       let
-        sig = buildSignature {
-          module =
+        sig =
+          buildSignature
             {
-              host,
-              user,
-              config,
-              ...
-            }:
-            { };
-          bindings = {
-            host = {
-              name = "igloo";
+              vocabulary = [
+                "host"
+                "user"
+              ];
+            }
+            {
+              module =
+                {
+                  host,
+                  user,
+                  config,
+                  ...
+                }:
+                { };
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+                user = {
+                  name = "tux";
+                };
+              };
+              defaultMergeStrategy = "bind-wins";
+              mergeStrategies = { };
             };
-            user = {
-              name = "tux";
-            };
-          };
-          defaultMergeStrategy = "bind-wins";
-          mergeStrategies = { };
-          vocabulary = [
-            "host"
-            "user"
-          ];
-        };
       in
       sig.unsatisfied;
     expected = [ ];
@@ -286,27 +294,31 @@ in
   flake.tests.signature.test-unsatisfied-excludes-optional-missing-vocabulary-key = {
     expr =
       let
-        sig = buildSignature {
-          module =
+        sig =
+          buildSignature
             {
-              host,
-              user ? null,
-              config,
-              ...
-            }:
-            { };
-          bindings = {
-            host = {
-              name = "igloo";
+              vocabulary = [
+                "host"
+                "user"
+              ];
+            }
+            {
+              module =
+                {
+                  host,
+                  user ? null,
+                  config,
+                  ...
+                }:
+                { };
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+              };
+              defaultMergeStrategy = "bind-wins";
+              mergeStrategies = { };
             };
-          };
-          defaultMergeStrategy = "bind-wins";
-          mergeStrategies = { };
-          vocabulary = [
-            "host"
-            "user"
-          ];
-        };
       in
       sig.unsatisfied;
     expected = [ ];
@@ -315,7 +327,7 @@ in
   flake.tests.signature.test-non-function-empty-signature = {
     expr =
       let
-        sig = buildSignature {
+        sig = buildSignature { } {
           module = {
             services.nginx.enable = true;
           };

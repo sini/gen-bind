@@ -113,15 +113,17 @@ let
   # which needs the whole pipeline and so lives with the other close cells.
   traversable = c: (c.record.mark or bindingLib.mark.open) != bindingLib.mark.floor;
 
-  # Door check (den-hoag-7gp66, P1 unit 7): `unit`/`crossings`/`projection` all required —
-  # a record door (§v1.2), open (R5). `linked` (below) forwards its argument to this
-  # function unmodified, so it inherits the same catchable, named refusal by delegation
-  # rather than a check of its own.
-  environment =
-    argsRaw:
+  # THE RECORDS (den-hoag-7gp66 P2, R7 (a)): `environment`, `linked` and `coherence` ask about a
+  # `unit`, the subject, over its crossings and the projection that reads their demands (plus the
+  # declared linkset, for `coherence`) — a list, a function and a record with no order among them,
+  # so each stays ONE required-argument record rather than an arbitrary positional order. Each is a
+  # `prelude.door` (open, R5) naming itself in its refusal; `linked` was a pass-through to
+  # `environment` and is a door of its own so its contract is published as data too. The `*Core`
+  # functions are the unchecked cores the crossing pipeline and `coherence` call.
+  environmentCore =
+    args:
     let
-      inherit
-        (prelude.checkRequired "gen-bind.crossing.environment" [ "unit" "crossings" "projection" ] argsRaw)
+      inherit (args)
         unit
         crossings
         projection
@@ -132,26 +134,33 @@ let
     in
     builtins.filter (t: t != unit) (prelude.unique demanded);
 
-  linked = args: environment args == [ ];
+  environmentFields = [
+    "unit"
+    "crossings"
+    "projection"
+  ];
+  environment = prelude.door {
+    name = "gen-bind.crossing.environment";
+    required = environmentFields;
+    open = true;
+  } environmentCore;
 
-  # Door check (den-hoag-7gp66, P1 unit 7): `unit`/`crossings`/`projection`/`linkset` all
-  # required — a record door (§v1.2), open (R5).
-  coherence =
-    argsRaw:
+  linked = prelude.door {
+    name = "gen-bind.crossing.linked";
+    required = environmentFields;
+    open = true;
+  } (args: environmentCore args == [ ]);
+
+  coherenceCore =
+    args:
     let
-      inherit
-        (prelude.checkRequired "gen-bind.crossing.coherence" [
-          "unit"
-          "crossings"
-          "projection"
-          "linkset"
-        ] argsRaw)
+      inherit (args)
         unit
         crossings
         projection
         linkset
         ;
-      e = environment { inherit unit crossings projection; };
+      e = environmentCore { inherit unit crossings projection; };
       offending = builtins.filter (t: !(prelude.elem t linkset.members)) e;
     in
     if offending == [ ] then
@@ -166,8 +175,17 @@ let
           inherit (linkset) members;
         };
       };
+  coherence = prelude.door {
+    name = "gen-bind.crossing.coherence";
+    required = environmentFields ++ [ "linkset" ];
+    open = true;
+  } coherenceCore;
 in
 {
+  cores = {
+    environment = environmentCore;
+    coherence = coherenceCore;
+  };
   inherit
     mkLinkset
     environment

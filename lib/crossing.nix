@@ -750,7 +750,7 @@ let
 
       placementFor =
         node:
-        andThen (adapterLib.placement {
+        andThen (adapterLib.cores.placement {
           inherit (node) staticityAdmissible deltaExact;
           inherit adapter;
           name = node.name;
@@ -853,7 +853,7 @@ let
             _:
             andThen (linksetLib.mkLinkset linkset) (
               ls:
-              andThen (linksetLib.coherence {
+              andThen (linksetLib.cores.coherence {
                 unit = targetId;
                 crossings = nodeList;
                 inherit projection;

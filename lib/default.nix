@@ -32,6 +32,5 @@ in
   inherit (identityLib) wrapIdentity;
   inherit (stripLib) stripBindingArgs;
   inherit (signatureLib) buildSignature;
-  wrap = wrapLib.wrapCore;
-  wrapAll = wrapLib.wrapAllCore;
+  inherit (wrapLib) wrap wrapAll;
 }

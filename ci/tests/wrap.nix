@@ -16,47 +16,52 @@ in
 
   flake.tests.wrap.test-function-partial-application = {
     expr =
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings = {
+            host = {
+              name = "igloo";
+            };
+          };
+        }
+        (
           { host, config, ... }:
           {
             networking.hostName = host.name;
-          };
-        bindings = {
-          host = {
-            name = "igloo";
-          };
-        };
-      }).wrapped;
+          }
+        )
+      ).wrapped;
     expected = true;
   };
 
   flake.tests.wrap.test-function-passthrough-no-match = {
     expr =
       (wrap {
-        module = { config, ... }: { };
         bindings = {
           host = { };
         };
-      }).wrapped;
+      } ({ config, ... }: { })).wrapped;
     expected = false;
   };
 
   flake.tests.wrap.test-function-fully-applied = {
     expr =
       let
-        result = wrap {
-          module =
-            { host }:
+        result =
+          wrap
             {
-              networking.hostName = host.name;
-            };
-          bindings = {
-            host = {
-              name = "igloo";
-            };
-          };
-        };
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+              };
+            }
+            (
+              { host }:
+              {
+                networking.hostName = host.name;
+              }
+            );
       in
       {
         wrapped = result.wrapped;
@@ -74,24 +79,27 @@ in
   # branch resolves it against producerConfigs BEFORE calling the module.
   flake.tests.wrap.test-fully-applied-config-thunk-producer-scoped = {
     expr =
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings = {
+            ch = [
+              (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
+            ];
+          };
+          producerConfigs = {
+            "host=iceberg" = {
+              networking.hostName = "iceberg";
+            };
+          };
+          thunkBindings = [ "ch" ];
+        }
+        (
           { ch, ... }:
           {
             out = builtins.head ch;
-          };
-        bindings = {
-          ch = [
-            (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
-          ];
-        };
-        producerConfigs = {
-          "host=iceberg" = {
-            networking.hostName = "iceberg";
-          };
-        };
-        thunkBindings = [ "ch" ];
-      }).module.out;
+          }
+        )
+      ).module.out;
     expected = "h-iceberg";
   };
 
@@ -100,23 +108,26 @@ in
   # (hasThunks = false), so the bound args apply byte-identically.
   flake.tests.wrap.test-fully-applied-no-thunk-byte-identical = {
     expr =
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings = {
+            host = {
+              name = "igloo";
+            };
+          };
+          producerConfigs = {
+            "host=iceberg" = {
+              networking.hostName = "iceberg";
+            };
+          };
+        }
+        (
           { host }:
           {
             networking.hostName = host.name;
-          };
-        bindings = {
-          host = {
-            name = "igloo";
-          };
-        };
-        producerConfigs = {
-          "host=iceberg" = {
-            networking.hostName = "iceberg";
-          };
-        };
-      }).module.networking.hostName;
+          }
+        )
+      ).module.networking.hostName;
     expected = "igloo";
   };
 
@@ -126,39 +137,47 @@ in
   # against it; otherwise it would see `{}`. Here `config` is bound ⇒ used.
   flake.tests.wrap.test-fully-applied-null-scope-thunk-uses-bound-config = {
     expr =
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings = {
+            ch = [
+              (genBind.mkThunk ({ config, ... }: [ config.networking.hostName ]))
+            ];
+            config = {
+              networking.hostName = "bound-cfg";
+            };
+          };
+          thunkBindings = [ "ch" ];
+        }
+        (
           { ch, config, ... }:
           {
             out = builtins.head ch;
-          };
-        bindings = {
-          ch = [
-            (genBind.mkThunk ({ config, ... }: [ config.networking.hostName ]))
-          ];
-          config = {
-            networking.hostName = "bound-cfg";
-          };
-        };
-        thunkBindings = [ "ch" ];
-      }).module.out;
+          }
+        )
+      ).module.out;
     expected = "bound-cfg";
   };
 
   flake.tests.wrap.test-attrset-passthrough = {
     expr =
-      (wrap {
-        module = {
-          services.nginx.enable = true;
-        };
+      (wrap { } {
+        services.nginx.enable = true;
       }).wrapped;
     expected = false;
   };
 
   flake.tests.wrap.test-imports-recursion = {
     expr =
-      (wrap {
-        module = {
+      (wrap
+        {
+          bindings = {
+            host = {
+              name = "igloo";
+            };
+          };
+        }
+        {
           imports = [
             (
               { host, config, ... }:
@@ -167,13 +186,8 @@ in
               }
             )
           ];
-        };
-        bindings = {
-          host = {
-            name = "igloo";
-          };
-        };
-      }).wrapped;
+        }
+      ).wrapped;
     expected = true;
   };
 
@@ -181,11 +195,10 @@ in
     expr =
       let
         result = wrap {
-          module = { host, config, ... }: { };
           bindings = {
             host = { };
           };
-        };
+        } ({ host, config, ... }: { });
       in
       builtins.attrNames result;
     expected = [
@@ -200,10 +213,8 @@ in
   flake.tests.wrap.test-consistent-shape-passthrough = {
     expr =
       let
-        result = wrap {
-          module = {
-            services.nginx.enable = true;
-          };
+        result = wrap { } {
+          services.nginx.enable = true;
         };
       in
       builtins.attrNames result;
@@ -219,19 +230,22 @@ in
   flake.tests.wrap.test-signature-populated = {
     expr =
       let
-        result = wrap {
-          module =
+        result =
+          wrap
             {
-              host,
-              config,
-              lib,
-              ...
-            }:
-            { };
-          bindings = {
-            host = { };
-          };
-        };
+              bindings = {
+                host = { };
+              };
+            }
+            (
+              {
+                host,
+                config,
+                lib,
+                ...
+              }:
+              { }
+            );
       in
       result.signature.bound ? host;
     expected = true;
@@ -240,39 +254,40 @@ in
   flake.tests.wrap.test-validator-null-on-passthrough = {
     expr =
       (wrap {
-        module = { config, ... }: { };
         bindings = {
           host = { };
         };
-      }).validator;
+      } ({ config, ... }: { })).validator;
     expected = null;
   };
 
   flake.tests.wrap.test-wrapAll-module-count = {
     expr =
       let
-        result = wrapAll {
-          modules = [
-            (
-              { host, config, ... }:
-              {
-                networking.hostName = host.name;
-              }
-            )
-            { services.nginx.enable = true; }
-            (
-              { host }:
-              {
-                x = host.name;
-              }
-            )
-          ];
-          bindings = {
-            host = {
-              name = "igloo";
-            };
-          };
-        };
+        result =
+          wrapAll
+            {
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+              };
+            }
+            [
+              (
+                { host, config, ... }:
+                {
+                  networking.hostName = host.name;
+                }
+              )
+              { services.nginx.enable = true; }
+              (
+                { host }:
+                {
+                  x = host.name;
+                }
+              )
+            ];
       in
       builtins.length result.modules;
     expected = 3;
@@ -281,14 +296,16 @@ in
   flake.tests.wrap.test-wrapAll-all-length-equals-modules-plus-validators = {
     expr =
       let
-        result = wrapAll {
-          modules = [
-            ({ host, config, ... }: { })
-          ];
-          bindings = {
-            host = { };
-          };
-        };
+        result =
+          wrapAll
+            {
+              bindings = {
+                host = { };
+              };
+            }
+            [
+              ({ host, config, ... }: { })
+            ];
       in
       builtins.length result.all == builtins.length result.modules + builtins.length result.validators;
     expected = true;
@@ -302,15 +319,18 @@ in
   # Cell 1 — the defect these cells were written for.
   flake.tests.wrap.test-undemanded-contract-does-not-fire = {
     expr = okD (
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings.a = "BAD";
+          contracts.a = contract.isType "set";
+        }
+        (
           { a, config, ... }:
           {
             out = "no-read";
-          };
-        bindings.a = "BAD";
-        contracts.a = contract.isType "set";
-      }).module
+          }
+        )
+      ).module
         { config = { }; }
     );
     expected = true;
@@ -319,15 +339,18 @@ in
   # Cell 2 — control for cell 1: laziness must not be bought by disarming contracts.
   flake.tests.wrap.test-control-demanded-contract-still-fires = {
     expr = okD (
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings.a = "BAD";
+          contracts.a = contract.isType "set";
+        }
+        (
           { a, config, ... }:
           {
             out = a;
-          };
-        bindings.a = "BAD";
-        contracts.a = contract.isType "set";
-      }).module
+          }
+        )
+      ).module
         { config = { }; }
     );
     expected = false;
@@ -336,15 +359,18 @@ in
   # Cell 3 — the fully-applied branch fails the same way and is in scope.
   flake.tests.wrap.test-fully-applied-undemanded-contract-does-not-fire = {
     expr = okD (
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings.a = "BAD";
+          contracts.a = contract.isType "set";
+        }
+        (
           { a, ... }:
           {
             out = "no-read";
-          };
-        bindings.a = "BAD";
-        contracts.a = contract.isType "set";
-      }).module
+          }
+        )
+      ).module
     );
     expected = true;
   };
@@ -352,15 +378,18 @@ in
   # Cell 4 — control for cell 3.
   flake.tests.wrap.test-control-fully-applied-demanded-contract-still-fires = {
     expr = okD (
-      (wrap {
-        module =
+      (wrap
+        {
+          bindings.a = "BAD";
+          contracts.a = contract.isType "set";
+        }
+        (
           { a, ... }:
           {
             out = a;
-          };
-        bindings.a = "BAD";
-        contracts.a = contract.isType "set";
-      }).module
+          }
+        )
+      ).module
     );
     expected = false;
   };
@@ -369,8 +398,15 @@ in
   flake.tests.wrap.test-sibling-binding-contract-not-forced = {
     expr =
       (
-        (wrap {
-          module =
+        (wrap
+          {
+            bindings = {
+              a = "BAD";
+              b = "READ-ME";
+            };
+            contracts.a = contract.isType "set";
+          }
+          (
             {
               a,
               b,
@@ -379,13 +415,9 @@ in
             }:
             {
               out = b;
-            };
-          bindings = {
-            a = "BAD";
-            b = "READ-ME";
-          };
-          contracts.a = contract.isType "set";
-        }).module
+            }
+          )
+        ).module
           { config = { }; }
       ).out;
     expected = "READ-ME";
@@ -395,15 +427,18 @@ in
   flake.tests.wrap.test-control-system-wins-yields-the-supplied-value = {
     expr =
       (
-        (wrap {
-          module =
+        (wrap
+          {
+            bindings.a = "BINDING";
+            mergeStrategies.a = "system-wins";
+          }
+          (
             { a, config, ... }:
             {
               out = a;
-            };
-          bindings.a = "BINDING";
-          mergeStrategies.a = "system-wins";
-        }).module
+            }
+          )
+        ).module
           {
             config = { };
             a = "SYSTEM";
@@ -416,17 +451,20 @@ in
   flake.tests.wrap.test-control-system-wins-annotation-yields-the-supplied-value = {
     expr =
       (
-        (wrap {
-          module =
+        (wrap
+          {
+            bindings.a = {
+              _mergeStrategy = "system-wins";
+              v = 1;
+            };
+          }
+          (
             { a, config, ... }:
             {
               out = a;
-            };
-          bindings.a = {
-            _mergeStrategy = "system-wins";
-            v = 1;
-          };
-        }).module
+            }
+          )
+        ).module
           {
             config = { };
             a = "SYSTEM";
@@ -442,15 +480,18 @@ in
     expr =
       let
         w =
-          (wrap {
-            module =
+          (wrap
+            {
+              bindings.a = "BAD";
+              contracts.a = contract.isType "set";
+            }
+            (
               { a, config, ... }:
               {
                 out = "no-read";
-              };
-            bindings.a = "BAD";
-            contracts.a = contract.isType "set";
-          }).validator
+              }
+            )
+          ).validator
             { config._module.args = { }; };
       in
       okD w.warnings;
@@ -463,15 +504,18 @@ in
   flake.tests.wrap.test-control-empty-thunkBindings-disables-auto-detection = {
     expr =
       let
-        r = wrap {
-          module =
-            { ch, config, ... }:
+        r =
+          wrap
             {
-              out = ch;
-            };
-          bindings.ch = [ (mkThunk ({ config, ... }: [ 5 ])) ];
-          thunkBindings = [ ];
-        };
+              bindings.ch = [ (mkThunk ({ config, ... }: [ 5 ])) ];
+              thunkBindings = [ ];
+            }
+            (
+              { ch, config, ... }:
+              {
+                out = ch;
+              }
+            );
       in
       isThunk (builtins.head (r.module { config = { }; }).out);
     expected = true;
@@ -481,15 +525,18 @@ in
   flake.tests.wrap.test-control-thunkBindings-naming-an-unbound-arg-leaves-the-thunk = {
     expr =
       let
-        r = wrap {
-          module =
-            { ch, config, ... }:
+        r =
+          wrap
             {
-              out = ch;
-            };
-          bindings.ch = [ (mkThunk ({ config, ... }: [ 5 ])) ];
-          thunkBindings = [ "notAnArg" ];
-        };
+              bindings.ch = [ (mkThunk ({ config, ... }: [ 5 ])) ];
+              thunkBindings = [ "notAnArg" ];
+            }
+            (
+              { ch, config, ... }:
+              {
+                out = ch;
+              }
+            );
       in
       isThunk (builtins.head (r.module { config = { }; }).out);
     expected = true;

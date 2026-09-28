@@ -6,9 +6,8 @@ in
   flake.tests.contract.test-mk-creates-marker = {
     expr =
       (contract.mk {
-        check = _: true;
         message = "ok";
-      })
+      } (_: true))
         ? __contract;
     expected = true;
   };
@@ -89,10 +88,9 @@ in
     expr =
       let
         c = contract.mk {
-          check = _: false;
           message = "bad";
           blame = "caller";
-        };
+        } (_: false);
       in
       !(builtins.tryEval (contract.apply c 42 null)).success;
     expected = true;

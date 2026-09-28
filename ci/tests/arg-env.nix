@@ -19,14 +19,12 @@ in
       (lib.evalModules {
         modules = [
           { config._module.freeformType = lib.types.lazyAttrsOf lib.types.raw; }
-          (adaptArgs {
-            adapt = _args: { injected = "from-adaptArgs"; };
-            module =
-              { injected, ... }:
-              {
-                out = injected;
-              };
-          })
+          (adaptArgs (_args: { injected = "from-adaptArgs"; }) (
+            { injected, ... }:
+            {
+              out = injected;
+            }
+          ))
         ];
       }).config.out;
     expected = "from-adaptArgs";
@@ -44,14 +42,12 @@ in
         };
         modules = [
           { config._module.freeformType = lib.types.lazyAttrsOf lib.types.raw; }
-          (adaptArgs {
-            adapt = args: { derived = "${args.base}-adapted"; };
-            module =
-              { derived, ... }:
-              {
-                out = derived;
-              };
-          })
+          (adaptArgs (args: { derived = "${args.base}-adapted"; }) (
+            { derived, ... }:
+            {
+              out = derived;
+            }
+          ))
         ];
       }).config.out;
     expected = "hello-adapted";
@@ -63,17 +59,20 @@ in
   # A slice reads `peer` from the threaded specialArgs.
   flake.tests.arg-env.test-crossEval-threads-specialArgs = {
     expr =
-      (crossEval {
-        inherit lib;
-        specialArgs = {
-          peer = "peer-val";
-        };
-        module =
+      (crossEval
+        {
+          specialArgs = {
+            peer = "peer-val";
+          };
+        }
+        lib
+        (
           { peer, ... }:
           {
             out = peer;
-          };
-      }).config.out;
+          }
+        )
+      ).config.out;
     expected = "peer-val";
   };
 
@@ -81,11 +80,8 @@ in
   # terminal type universe — the slice declares no options yet its `k` resolves.
   flake.tests.arg-env.test-crossEval-freeform-absorbs-opaque-keys = {
     expr =
-      (crossEval {
-        inherit lib;
-        module = {
-          k = "opaque-value";
-        };
+      (crossEval { } lib {
+        k = "opaque-value";
       }).config.k;
     expected = "opaque-value";
   };
@@ -94,17 +90,20 @@ in
   # configGate uses); a slice reads the threaded arg.
   flake.tests.arg-env.test-crossEval-threads-moduleArgs = {
     expr =
-      (crossEval {
-        inherit lib;
-        moduleArgs = {
-          extra = "via-module-args";
-        };
-        module =
+      (crossEval
+        {
+          moduleArgs = {
+            extra = "via-module-args";
+          };
+        }
+        lib
+        (
           { extra, ... }:
           {
             out = extra;
-          };
-      }).config.out;
+          }
+        )
+      ).config.out;
     expected = "via-module-args";
   };
 
@@ -120,11 +119,8 @@ in
       (lib.evalModules {
         modules = [
           { config._module.freeformType = lib.types.lazyAttrsOf lib.types.raw; }
-          (configGate {
-            gate = _args: true;
-            module = {
-              out = "gated-content";
-            };
+          (configGate { } (_args: true) {
+            out = "gated-content";
           })
         ];
       }).config.out;
@@ -146,11 +142,8 @@ in
               default = "DEFAULT";
             };
           }
-          (configGate {
-            gate = _args: false;
-            module = {
-              gated = "gated-content";
-            };
+          (configGate { } (_args: false) {
+            gated = "gated-content";
           })
         ];
       }).config.gated;
@@ -164,15 +157,18 @@ in
       (lib.evalModules {
         modules = [
           { config._module.freeformType = lib.types.lazyAttrsOf lib.types.raw; }
-          (configGate {
-            gate = _args: true;
-            adapt = _args: { fromAdapt = "adapted-arg"; };
-            module =
+          (configGate
+            {
+              adapt = _args: { fromAdapt = "adapted-arg"; };
+            }
+            (_args: true)
+            (
               { fromAdapt, ... }:
               {
                 out = fromAdapt;
-              };
-          })
+              }
+            )
+          )
         ];
       }).config.out;
     expected = "adapted-arg";
@@ -193,11 +189,9 @@ in
               default = true;
             };
           }
-          (configGate {
-            gate = args: args.options ? marker; # eval-time read of the OUTER option-set
-            module = {
-              fromSlice = "content";
-            };
+          # the gate: an eval-time read of the OUTER option-set
+          (configGate { } (args: args.options ? marker) {
+            fromSlice = "content";
           })
         ];
       }).config.fromSlice;
@@ -216,18 +210,16 @@ in
         evaluated = lib.evalModules {
           modules = [
             { config._module.freeformType = lib.types.lazyAttrsOf lib.types.raw; }
-            (configGate {
-              gate = _args: true;
-              module =
-                { lib, ... }:
-                {
-                  options.gatedOnly = lib.mkOption {
-                    type = lib.types.str;
-                    default = "d";
-                  };
-                  config.gatedOnly = "v";
+            (configGate { } (_args: true) (
+              { lib, ... }:
+              {
+                options.gatedOnly = lib.mkOption {
+                  type = lib.types.str;
+                  default = "d";
                 };
-            })
+                config.gatedOnly = "v";
+              }
+            ))
           ];
         };
       in
@@ -244,31 +236,29 @@ in
   # ── Laziness — the transform CONSTRUCTORS force nothing at wrap time ─────────────────
   # Building the adaptArgs wrapper forces neither `adapt` nor `module`.
   flake.tests.arg-env.test-adaptArgs-lazy-no-force = {
-    expr = builtins.isFunction (adaptArgs {
-      adapt = throw "adapt forced at wrap time";
-      module = throw "module forced at wrap time";
-    });
+    expr = builtins.isFunction (
+      adaptArgs (throw "adapt forced at wrap time") (throw "module forced at wrap time")
+    );
     expected = true;
   };
 
   # Building the configGate wrapper forces neither `gate`, `module`, nor `adapt`.
   flake.tests.arg-env.test-configGate-lazy-no-force = {
-    expr = builtins.isFunction (configGate {
-      gate = throw "gate forced at wrap time";
-      module = throw "module forced at wrap time";
-      adapt = throw "adapt forced at wrap time";
-    });
+    expr = builtins.isFunction (
+      configGate {
+        adapt = throw "adapt forced at wrap time";
+      } (throw "gate forced at wrap time") (throw "module forced at wrap time")
+    );
     expected = true;
   };
 
   # crossEval returns the evalModules result at WHNF without forcing a slice config value.
   flake.tests.arg-env.test-crossEval-lazy-result-not-forced = {
-    expr = builtins.isAttrs (crossEval {
-      inherit lib;
-      module = {
+    expr = builtins.isAttrs (
+      crossEval { } lib {
         out = throw "config value forced at wrap time";
-      };
-    });
+      }
+    );
     expected = true;
   };
 }

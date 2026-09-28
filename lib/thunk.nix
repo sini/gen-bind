@@ -8,21 +8,7 @@
 # The thunk's __fn is a closure whose formal parameters (builtins.functionArgs)
 # determine which context args to inject alongside config.
 { prelude }:
-{
-  mkThunk = fn: {
-    __configThunk = true;
-    __fn = fn;
-    __sourceScope = null;
-  };
-
-  mkThunkFrom = scopeId: fn: {
-    __configThunk = true;
-    __fn = fn;
-    __sourceScope = scopeId;
-  };
-
-  isThunk = v: builtins.isAttrs v && v ? __configThunk;
-
+let
   # Resolve thunks within list-valued bindings.
   #
   # For each arg name in thunkArgNames whose binding value is a list,
@@ -67,35 +53,24 @@
   # the Adapter TYPE to carry a typed thunk channel — SITE-3's argued
   # impossibility under ADR-0013, not a scope limit on either record. See
   # `wrap.nix`'s `isThunkArg` for the full argument and O-1's measured ground.
-  # Door check (den-hoag-7gp66, P1 unit 7): `config`/`ctx`/`thunkArgNames`/`bindings`
-  # required, `producerConfigs` optional — a mixed door, closed overall (§v1.2).
-  resolveThunks =
-    argsRaw:
+  #
+  # `resolveThunks { producerConfigs ? { }; } { config; ctx; thunkArgNames; bindings; }`
+  # (den-hoag-7gp66 P2, R7). The option is one closed set, first. The four operands stay ONE
+  # required-argument record (R7 (a)): the bindings are the subject, and the consumer config, the
+  # context and the thunk names beside them have no order among them. The record is a
+  # `prelude.door` too (open, R5), guarded against the options step (`optionsStep`), so
+  # `producerConfigs` given on the record is refused by name rather than silently dropped.
+  # `cores.resolveThunks` is the unchecked core `wrap.nix` calls per bound name.
+  resolveThunksCore =
+    o: args:
     let
-      checked =
-        prelude.checkOptions "gen-bind.resolveThunks"
-          [
-            "config"
-            "ctx"
-            "thunkArgNames"
-            "bindings"
-            "producerConfigs"
-          ]
-          (
-            prelude.checkRequired "gen-bind.resolveThunks" [
-              "config"
-              "ctx"
-              "thunkArgNames"
-              "bindings"
-            ] argsRaw
-          );
-      inherit (checked)
+      inherit (args)
         config
         ctx
         thunkArgNames
         bindings
         ;
-      producerConfigs = checked.producerConfigs or { };
+      producerConfigs = o.producerConfigs or { };
     in
     builtins.mapAttrs (
       k: v:
@@ -128,4 +103,39 @@
       else
         v
     ) bindings;
+
+  resolveThunksOptions = prelude.door {
+    name = "gen-bind.resolveThunks";
+    optional = [ "producerConfigs" ];
+  };
+  resolveThunksRecord = prelude.door {
+    name = "gen-bind.resolveThunks";
+    required = [
+      "config"
+      "ctx"
+      "thunkArgNames"
+      "bindings"
+    ];
+    open = true;
+    optionsStep = resolveThunks;
+  };
+  resolveThunks = resolveThunksOptions (o: resolveThunksRecord (resolveThunksCore o));
+in
+{
+  inherit resolveThunks;
+  cores.resolveThunks = resolveThunksCore;
+  mkThunk = fn: {
+    __configThunk = true;
+    __fn = fn;
+    __sourceScope = null;
+  };
+
+  mkThunkFrom = scopeId: fn: {
+    __configThunk = true;
+    __fn = fn;
+    __sourceScope = scopeId;
+  };
+
+  isThunk = v: builtins.isAttrs v && v ? __configThunk;
+
 }

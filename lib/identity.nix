@@ -7,33 +7,34 @@
 # unit (module) has a unique identity that the linker uses to resolve
 # duplicates. gen-bind's key serves the same role within evalModules.
 #
-# Door check (den-hoag-7gp66, P1 unit 7): `class`/`module`/`identity` required, `isAnon`
-# optional — a mixed door, closed overall (§v1.2), so an unknown field is refused by
-# name and catchably rather than aborting Nix's own uncatchable arity check.
+# `wrapIdentity { isAnon ? false; } class identity module` (den-hoag-7gp66 P2, R7): the option is
+# one closed set, first, checked when `wrapIdentity opts` is formed (a `prelude.door`), so an
+# unknown option is refused by name and catchably; the operands are positional, the class and the
+# identity — the two halves of the key, in the key's own order — as configuration and the module,
+# the value wrapped, as the subject, last.
 { prelude }:
 let
   moduleConvention = import ./module-convention.nix { };
 in
 {
   wrapIdentity =
-    argsRaw:
-    let
-      args = prelude.checkOptions "gen-bind.wrapIdentity" [
-        "class"
-        "module"
-        "identity"
-        "isAnon"
-      ] (prelude.checkRequired "gen-bind.wrapIdentity" [ "class" "module" "identity" ] argsRaw);
-      inherit (args) class module identity;
-      isAnon = args.isAnon or false;
-      loc = "${class}@${identity}";
-    in
-    if isAnon then
-      moduleConvention.setDefaultModuleLocation loc module
-    else
+    prelude.door
       {
-        key = loc;
-        _file = loc;
-        imports = [ module ];
-      };
+        name = "gen-bind.wrapIdentity";
+        optional = [ "isAnon" ];
+      }
+      (
+        o: class: identity: module:
+        let
+          loc = "${class}@${identity}";
+        in
+        if o.isAnon or false then
+          moduleConvention.setDefaultModuleLocation loc module
+        else
+          {
+            key = loc;
+            _file = loc;
+            imports = [ module ];
+          }
+      );
 }

@@ -25,25 +25,20 @@ let
     };
 
   wrapped = genBind.wrap {
-    module = hostModule;
     bindings.host = {
       name = "alpha";
     };
-  };
+  } hostModule;
 
   evaluated = lib.evalModules { modules = [ wrapped.module ]; };
 
   # Key dedup: two references to the same keyed module must merge to ONE definition.
-  keyed = genBind.wrapIdentity {
-    class = "nixos";
-    identity = "dedup";
-    module = {
-      options.items = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-      };
-      config.items = [ "x" ];
+  keyed = genBind.wrapIdentity { } "nixos" "dedup" {
+    options.items = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
     };
+    config.items = [ "x" ];
   };
   evaluatedKeyed = lib.evalModules {
     modules = [
@@ -53,17 +48,19 @@ let
   };
 
   # Anonymous module location: setDefaultModuleLocation attributes the declaration.
-  anon = genBind.wrapIdentity {
-    class = "nixos";
-    identity = "anonmod";
-    isAnon = true;
-    module = {
-      options.foo = lib.mkOption {
-        type = lib.types.str;
-        default = "y";
+  anon =
+    genBind.wrapIdentity
+      {
+        isAnon = true;
+      }
+      "nixos"
+      "anonmod"
+      {
+        options.foo = lib.mkOption {
+          type = lib.types.str;
+          default = "y";
+        };
       };
-    };
-  };
   evaluatedAnon = lib.evalModules { modules = [ anon ]; };
 in
 {
@@ -102,19 +99,21 @@ in
   flake.tests.evalmodules-equivalence.test-all-batch-through-evalModules = {
     expr =
       let
-        batch = genBind.wrapAll {
-          modules = [
-            (
-              { host, config, ... }:
-              {
-                config.result = host.name;
-              }
-            )
-          ];
-          bindings.host = {
-            name = "beta";
-          };
-        };
+        batch =
+          genBind.wrapAll
+            {
+              bindings.host = {
+                name = "beta";
+              };
+            }
+            [
+              (
+                { host, config, ... }:
+                {
+                  config.result = host.name;
+                }
+              )
+            ];
         evaluated = lib.evalModules {
           modules = [
             (

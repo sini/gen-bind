@@ -14,19 +14,6 @@
 { prelude }:
 let
   provenanceLib = import ./provenance.nix { inherit prelude; };
-in
-{
-  mergeStrategy = {
-    bindWins = "bind-wins";
-    systemWins = "system-wins";
-    error = "error";
-
-    fromBindings =
-      bindings:
-      builtins.mapAttrs (
-        _: v: if builtins.isAttrs v && v ? _mergeStrategy then v._mergeStrategy else null
-      ) bindings;
-  };
 
   # ★★★ ADR-0023 (b) — POINTER DECLARATION, PARITY WITH `thunk.nix`'s. The full
   # four-part declaration for the crossing route this validator gets carried
@@ -49,19 +36,19 @@ in
   # declaration for the full argument and O-3's measured ground.
   #
   # Academic: Findler 2002 §2.2 — blame assignment at collision detection.
-  # Door check (den-hoag-7gp66, P1 unit 7): `resolvePolicy`/`boundArgNames`/`provenance` all
-  # required — a record door (§v1.2), open (R5).
-  mkMergeValidator =
-    argsRaw:
+  #
+  # `mkMergeValidator { resolvePolicy; boundArgNames; provenance; } moduleArgs` (den-hoag-7gp66 P2,
+  # R7 (a)): the module-system args are the subject, last, and the three fields before them — a
+  # policy function, a name list and a provenance map — have no order among them, so they stay ONE
+  # required-argument record rather than an arbitrary positional order. The record is a
+  # `prelude.door` (open, R5): a missing field is refused by name, catchably, when it is applied.
+  # `cores.mkMergeValidator` is the unchecked core `wrap.nix` calls.
+  mkMergeValidatorCore =
+    args:
     let
-      checked = prelude.checkRequired "gen-bind.mkMergeValidator" [
-        "resolvePolicy"
-        "boundArgNames"
-        "provenance"
-      ] argsRaw;
-      inherit (checked) resolvePolicy boundArgNames provenance;
+      inherit (args) resolvePolicy boundArgNames provenance;
     in
-    builtins.seq checked (
+    (
       moduleArgs:
       let
         checks = builtins.concatMap (
@@ -104,4 +91,28 @@ in
         warnings = checks;
       }
     );
+in
+{
+  mergeStrategy = {
+    bindWins = "bind-wins";
+    systemWins = "system-wins";
+    error = "error";
+
+    fromBindings =
+      bindings:
+      builtins.mapAttrs (
+        _: v: if builtins.isAttrs v && v ? _mergeStrategy then v._mergeStrategy else null
+      ) bindings;
+  };
+
+  mkMergeValidator = prelude.door {
+    name = "gen-bind.mkMergeValidator";
+    required = [
+      "resolvePolicy"
+      "boundArgNames"
+      "provenance"
+    ];
+    open = true;
+  } mkMergeValidatorCore;
+  cores.mkMergeValidator = mkMergeValidatorCore;
 }

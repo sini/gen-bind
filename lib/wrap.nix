@@ -112,13 +112,12 @@ let
         inherit module;
         wrapped = false;
         validator = null;
-        signature = signatureLib.buildSignature {
+        signature = signatureLib.cores.buildSignature { inherit provenance; } {
           inherit
             module
             bindings
             defaultMergeStrategy
             mergeStrategies
-            provenance
             ;
         };
         advertisedArgs = moduleArgs;
@@ -205,11 +204,10 @@ let
           if policy k == "system-wins" then
             moduleCallArgs.${k} or bindings.${k}
           else if isThunkArg k then
-            (thunkLib.resolveThunks {
+            (thunkLib.cores.resolveThunks { inherit producerConfigs; } {
               config = thunkConfig;
               ctx = bindings;
               thunkArgNames = [ k ];
-              inherit producerConfigs;
               bindings = {
                 ${k} = bindings.${k};
               };
@@ -218,18 +216,17 @@ let
             bindings.${k};
 
         # Build the validator for collision detection
-        validator = mergeStrategyLib.mkMergeValidator {
+        validator = mergeStrategyLib.cores.mkMergeValidator {
           resolvePolicy = policy;
           inherit boundArgNames provenance;
         };
 
-        signature = signatureLib.buildSignature {
+        signature = signatureLib.cores.buildSignature { inherit provenance; } {
           inherit
             module
             bindings
             defaultMergeStrategy
             mergeStrategies
-            provenance
             ;
         };
 
@@ -305,14 +302,9 @@ let
       };
       wrapped = anyWrapped;
       validator = firstValidator;
-      signature = signatureLib.buildSignature {
+      signature = signatureLib.cores.buildSignature { inherit (cfg) provenance; } {
         module = _: { };
-        inherit (cfg)
-          bindings
-          defaultMergeStrategy
-          mergeStrategies
-          provenance
-          ;
+        inherit (cfg) bindings defaultMergeStrategy mergeStrategies;
       };
       advertisedArgs = { };
     };
@@ -347,14 +339,9 @@ let
         inherit module;
         wrapped = false;
         validator = null;
-        signature = signatureLib.buildSignature {
+        signature = signatureLib.cores.buildSignature { inherit (cfgWithContracted) provenance; } {
           inherit module;
-          inherit (cfgWithContracted)
-            bindings
-            defaultMergeStrategy
-            mergeStrategies
-            provenance
-            ;
+          inherit (cfgWithContracted) bindings defaultMergeStrategy mergeStrategies;
         };
         advertisedArgs = { };
       };
@@ -390,7 +377,28 @@ let
       signatures = builtins.map (r: r.signature) results;
       all = mods ++ vals;
     };
+
+  # THE PUBLISHED DOORS (den-hoag-7gp66 P2, R7): `wrap opts module` and `wrapAll opts modules`.
+  # Every field of the old one-record call but the module(s) is defaulted, so those fields are the
+  # OPTIONS — one closed set, first, checked when `wrap opts` is formed — and the module, the value
+  # wrapped, is the subject, last. The accepted set is `defaultCfg`'s own keys, read rather than
+  # restated, so the door and the defaults cannot disagree. `wrapCore`/`wrapAllCore` stay the
+  # unchecked record-taking cores this library's own callers use (the hosted terminal's
+  # `bindFormals`, and `wrapImportsModule` per import).
+  wrap = prelude.door {
+    name = "gen-bind.wrap";
+    optional = builtins.attrNames defaultCfg;
+  } (o: module: wrapCore (o // { inherit module; }));
+  wrapAll = prelude.door {
+    name = "gen-bind.wrapAll";
+    optional = builtins.attrNames defaultCfg;
+  } (o: modules: wrapAllCore (o // { inherit modules; }));
 in
 {
-  inherit wrapCore wrapAllCore;
+  inherit
+    wrapCore
+    wrapAllCore
+    wrap
+    wrapAll
+    ;
 }

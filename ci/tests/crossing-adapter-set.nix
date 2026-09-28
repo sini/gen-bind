@@ -230,9 +230,8 @@ let
     bindFormals = values: body: {
       imports =
         (genBind.wrapAll {
-          modules = [ body ];
           bindings = values;
-        }).modules;
+        } [ body ]).modules;
     };
   };
 
@@ -398,20 +397,24 @@ let
   # The flake-module evaluator, INJECTED exactly as the system evaluator is. A
   # stub is the right instrument: the adapter's whole contract at this position
   # is that it hands the Body and the systems to the evaluator it was given.
-  flakeTerminal = mkFlakeTerminal {
-    evalFlakeModule = argsIn: mod: {
-      config.flake = {
-        modulesSeen = mod.imports;
-        inherit (mod) systems;
-        inputsSeen = builtins.attrNames argsIn.inputs;
+  flakeTerminal =
+    mkFlakeTerminal
+      {
+        systems = [ "x86_64-linux" ];
+      }
+      {
+        evalFlakeModule = argsIn: mod: {
+          config.flake = {
+            modulesSeen = mod.imports;
+            inherit (mod) systems;
+            inputsSeen = builtins.attrNames argsIn.inputs;
+          };
+        };
+        inputs = {
+          upstream = "an-input";
+        };
+        self = "the-self";
       };
-    };
-    inputs = {
-      upstream = "an-input";
-    };
-    self = "the-self";
-    systems = [ "x86_64-linux" ];
-  };
 
   flakeModuleBody = [ { config.packages = { }; } ];
 
@@ -469,11 +472,10 @@ let
       collisionModules;
 
   shippedPath = genBind.wrapAll {
-    modules = collisionModules;
     bindings = {
       host = collidingValue;
     };
-  };
+  } collisionModules;
 
   collisionClosed = pipeline {
     imports.host = imp c.any;

@@ -1,602 +1,271 @@
-# Door checks (den-hoag-7gp66, P1 unit 7) — every closed door this unit converted
-# (identity.nix, strip.nix, arg-env.nix, signature.nix, contract.nix,
-# merge-strategy.nix, thunk.nix, crossing-linkset.nix, crossing-adapter.nix,
-# crossing-adapter-set.nix) now takes `prelude.checkOptions`/`checkRequired`
-# (gen-prelude 0ac7b66) instead of a bare `{ ... }:` destructure, so an unknown
-# option or a missing field is a NAMED, CATCHABLE refusal rather than Nix's own
-# uncatchable "called with unexpected argument".
+# THE DOORS (den-hoag-7gp66 P1, then P2 — `prelude.door`) — every published step of gen-bind taking a
+# record catches its own violations.
 #
-# `tests` pins what each door ADMITS/REFUSES and that every refusal is catchable
-# (`tryEval`, ADR-0025 item 1) — the same split gen-prelude's own `ci/tests/door.nix`
-# uses for `checkOptions`/`checkRequired` themselves. `testsError` pins WHICH
-# refusal fired and that it names the door first (R6).
+# A native closed formal (`{ class, module, identity }:`) aborts UNCATCHABLY on an unknown or a
+# missing argument — not even `builtins.tryEval` sees it, which is ADR-0025 item 1's named defect.
+# Every record step in `_door-table.nix` is a `prelude.door`, so the same violations are NAMED and
+# CATCHABLE. Each cell `seq`s the STEP applied to its argument and nothing else (no later argument,
+# no field read), so a refusal is observed where the step is applied — which is also the whole of
+# what the P1 lazy-door fix (`door-application-strictness`) pinned for seven doors one by one: the
+# door construction forces its check at application, for every row. Covered, per row:
+#   - an OPTIONS step admits `{ }`, and refuses an unknown option and a non-attrset (G1/G4)
+#   - a RECORD step admits its good record, refuses a missing field (D2) and a non-attrset, and
+#     admits a field no step names (G2, R5's stated price; G10-ctl on the guarded rows)
+#   - a record behind an options step refuses each of that step's own names (`optionsStep`, G10)
+#   - every step publishes its row as its contract, as data and through the functor-aware reader (D3)
+#   - a non-default option reaches the partially applied door and moves the answer (G3)
 #
-# A MIXED door (required + optional fields, closed overall, §v1.2) gets a
-# missing-field cell and an unknown-option cell. A RECORD door (all fields
-# required, open — R5's width subtyping) gets an extra-field-admitted cell and a
-# missing-field cell; it has no `checkOptions` layer, so there is no "unknown
-# option" for it to refuse. A door never gets both halves: it is either open or
-# closed, never both, so a door that refused every fixture here would red the
-# admission cells and one that admitted every fixture would red the refusal
-# cells (mirroring `door.nix`'s own header note).
-#
-# Out of scope, by the same depth-<=2 top-level-export census the build report
-# for this unit used: `composeWith` (`wrap.nix`, positional, no attrset door),
-# `crossing.linked` (delegates to `environment` unmodified — see that door's own
-# comment in `crossing-linkset.nix`), and `mkHostedTerminal`'s nested `.adapter`
-# (depth 3+, its own pre-existing hand-rolled catchable `unknownCarriageMembers`
-# check).
-{ genBind, lib, ... }:
+# `tests` pins what each step ADMITS/REFUSES and that every refusal is catchable; `testsError` pins
+# WHICH refusal fired and that it names the door first (R6).
+{
+  genBind,
+  prelude,
+  lib,
+  ...
+}:
 let
-  inherit (genBind)
-    wrapIdentity
-    stripBindingArgs
-    adaptArgs
-    crossEval
-    configGate
-    buildSignature
-    resolveThunks
-    mkMergeValidator
-    ;
-  inherit (genBind.contract) mk;
-  inherit (genBind.crossing)
-    environment
-    coherence
-    placement
-    mkHostedTerminal
-    mkFlakeTerminal
-    ;
+  F = import ./_door-table.nix { inherit genBind lib; };
 
-  refused = v: !(builtins.tryEval (builtins.deepSeq v v)).success;
+  applied = step: r: (builtins.tryEval (builtins.seq (step r) true)).success;
+  unknown = {
+    unknownField = 1;
+  };
+  each = f: builtins.mapAttrs (_: f);
+  flag = v: names: lib.genAttrs names (_: v);
+  guarded = lib.filterAttrs (_: r: r ? guardedBy) F.records;
 
-  pin = door: msg: {
+  # Every options door on the published surface (depth <= 2), read off its `__contract` rather than
+  # a hand list, so a new one is seen whether or not a row was written for it.
+  isDoor = v: builtins.isAttrs v && v ? __contract && v ? __functor;
+  isOptionsDoor = v: isDoor v && !v.__contract.open && v.__contract.required == [ ];
+  surfaceOptionDoors =
+    builtins.filter (n: isOptionsDoor genBind.${n}) (builtins.attrNames genBind)
+    ++
+      builtins.concatMap
+        (
+          ns:
+          map (n: "${ns}.${n}") (
+            builtins.filter (n: isOptionsDoor genBind.${ns}.${n}) (builtins.attrNames genBind.${ns})
+          )
+        )
+        [
+          "contract"
+          "crossing"
+        ];
+
+  # The bytes. `[.]`, `[(]` and `[)]` neutralise the metacharacters, as in gen-prelude's goldens.
+  quoted = names: lib.concatMapStringsSep ", " (n: "'${n}'") names;
+  name = key: "gen-bind[.]${builtins.replaceStrings [ "." ] [ "[.]" ] key}";
+  pin = key: msg: {
     type = "ThrownError";
-    msg = "^${door}: ${msg}$";
+    msg = "^${name key}: ${msg}$";
   };
-  missingPin =
-    door: field: required:
-    pin door "required field '${field}' is missing [(]required: ${required}[)] [(]in prelude[.]checkRequired[)]";
-  unknownPin =
-    door: accepted:
-    pin door "'colr' is not an option of this door; the options are closed [(]accepted: ${accepted}[)] [(]in prelude[.]checkOptions[)]";
-  # `mkFlakeTerminal` moved to the NATIVE-ELLIPSIS class (den-hoag-7gp66, owner-ruled arm
-  # (C)): a missing required field is the evaluator's own refusal at the door's own
-  # application, not `prelude.checkRequired`'s throw, so it carries no door-name prefix
-  # and nix-unit classes it `TypeError` rather than `ThrownError` (measured,
-  # `nix-unit --flake .#testsError`, a control pinning the wrong `type` names the actual
-  # one). `unknownPin` above is unaffected — an unknown field still goes through
-  # `checkOptions`'s catchable throw.
-  #
-  # ★ NO TRAILING `$`. A `throw`'s own message is the whole final `error: ` section with
-  # nothing after it, which is why `pin` above anchors both ends. THIS error carries
-  # position info the evaluator attaches itself — an `at <file>:<line>:<col>:` trace plus
-  # a source snippet always follows on the next lines — so `gen-harness`'s `ci
-  # --tests-error` runner (`error-plane-runner.py`'s `errmsg`, which keeps every line
-  # after the last `error: ` marker, not just the first) never hands back a string a
-  # trailing `$` can match; measured red with it (`MSGMISS`), green without.
-  nativeMissingPin = fnName: field: {
-    type = "TypeError";
-    msg = "^function '${fnName}' called without required argument '${field}'";
+  optionGoldens = key: row: {
+    "test-${key}-unknown-option-message" = {
+      expr = row.door unknown;
+      expectedError = pin key "'unknownField' is not an option of this door; the options are closed [(]accepted: ${quoted row.optional}[)] [(]in prelude[.]checkOptions[)]";
+    };
   };
+  recordGoldens =
+    key: row:
+    let
+      req = "[(]required: ${quoted row.required}[)] [(]in prelude[.]checkRequired[)]";
+    in
+    {
+      "test-${key}-missing-required-field-message" = {
+        expr = row.step (builtins.removeAttrs row.good [ row.drop ]);
+        expectedError = pin key "required field '${row.drop}' is missing ${req}";
+      };
+      "test-${key}-non-attrset-argument-message" = {
+        expr = row.step 1;
+        expectedError = pin key "the argument must be an attrset, not a int ${req}";
+      };
+    }
+    // lib.optionalAttrs (row ? guardedBy) (
+      let
+        o = builtins.head F.options.${row.guardedBy}.optional;
+      in
+      {
+        "test-${key}-misplaced-option-message" = {
+          expr = row.step (row.good // { ${o} = null; });
+          expectedError = pin key "'${o}' is an option of ${name row.guardedBy}, not a field of this record [(]in prelude[.]checkGuarded[)]";
+        };
+      }
+    );
 in
 {
-  flake.tests = {
-    # ── mixed doors: missing field / unknown option, both refused catchably ──
-    wrapIdentity = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused (wrapIdentity {
-          class = "nixos";
-          module = { };
-        });
-        expected = true;
+  flake.tests.door-checks = {
+    # ★ LIVE CONTROLS FOR THE WHOLE SUITE: `tryEval` catches an ordinary throw, a non-throwing value
+    # answers, and a deliberately LAZY door — its check in a `let` behind a value that never reads it
+    # — reads as admitting, so the `false` cells below are not vacuously strict.
+    test-control-tryeval-catches-an-ordinary-throw = {
+      expr = applied (_: throw "control probe, not this suite's subject") null;
+      expected = false;
+    };
+    test-control-tryeval-answers-a-non-throwing-value = {
+      expr = applied (x: x) 1;
+      expected = true;
+    };
+    test-control-a-lazy-construction-reads-as-admitting = {
+      expr = applied (
+        args:
+        let
+          _checked = if args ? a then args else throw "missing a";
+        in
+        {
+          x = 1;
+        }
+      ) { };
+      expected = true;
+    };
+    # The table is the subject; a row dropped from it would drop its cells silently.
+    test-door-table-rows = {
+      expr = {
+        options = builtins.attrNames F.options;
+        records = builtins.attrNames F.records;
       };
-      test-unknown-option-refused-catchably = {
-        expr = refused (wrapIdentity {
-          class = "nixos";
-          module = { };
-          identity = "x";
-          colr = 1;
-        });
-        expected = true;
+      expected = {
+        options = [
+          "buildSignature"
+          "configGate"
+          "contract.mk"
+          "crossEval"
+          "crossing.mkFlakeTerminal"
+          "resolveThunks"
+          "wrap"
+          "wrapAll"
+          "wrapIdentity"
+        ];
+        records = [
+          "buildSignature"
+          "crossing.coherence"
+          "crossing.environment"
+          "crossing.linked"
+          "crossing.mkFlakeTerminal"
+          "crossing.mkHostedTerminal"
+          "crossing.placement"
+          "mkMergeValidator"
+          "resolveThunks"
+        ];
       };
     };
 
-    crossEval = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused (crossEval { inherit lib; }).config;
-        expected = true;
-      };
-      test-unknown-option-refused-catchably = {
-        expr =
-          refused
-            (crossEval {
-              inherit lib;
-              module = { };
-              colr = 1;
-            }).config;
-        expected = true;
-      };
+    test-the-empty-options-are-admitted-at-every-options-step = {
+      expr = each (d: applied d.door { }) F.options;
+      expected = each (_: true) F.options;
+    };
+    # G1/G4: refused when the options are applied, before any operand or record.
+    test-an-unknown-option-is-refused-catchably-at-every-options-step = {
+      expr = each (d: applied d.door unknown) F.options;
+      expected = each (_: false) F.options;
+    };
+    test-a-non-attrset-options-argument-is-refused-catchably = {
+      expr = each (d: applied d.door 1) F.options;
+      expected = each (_: false) F.options;
+    };
+    # D3: the contract is published as data, and the functor-aware reader reads the same map.
+    test-every-options-step-publishes-the-row-as-its-contract = {
+      expr = each (d: {
+        inherit (d.door.__contract) optional required open;
+        functionArgs = prelude.functionArgs d.door;
+      }) F.options;
+      expected = each (d: {
+        inherit (d) optional;
+        required = [ ];
+        open = false;
+        functionArgs = flag true d.optional;
+      }) F.options;
+    };
+    # G3: a non-default option reaches the partially applied door (agrees with the full call) and
+    # moves the answer (differs from `{ }`).
+    test-a-non-default-option-reaches-the-partial-application = {
+      expr = each (
+        d:
+        let
+          f1 = d.door d.on;
+        in
+        {
+          agrees = d.run f1 == d.run (d.door d.on);
+          differs = d.run f1 != d.run (d.door { });
+        }
+      ) F.options;
+      expected = each (_: {
+        agrees = true;
+        differs = true;
+      }) F.options;
     };
 
-    configGate = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused ((configGate { gate = _: true; }) { inherit lib; }).config;
-        expected = true;
+    test-the-good-record-is-admitted-at-every-record-step = {
+      expr = each (d: applied d.step d.good) F.records;
+      expected = each (_: true) F.records;
+    };
+    # D2, at the step's own application.
+    test-a-missing-field-is-refused-catchably = {
+      expr = each (d: applied d.step (builtins.removeAttrs d.good [ d.drop ])) F.records;
+      expected = each (_: false) F.records;
+    };
+    test-an-empty-record-is-refused-catchably = {
+      expr = each (d: applied d.step { }) F.records;
+      expected = each (_: false) F.records;
+    };
+    test-a-non-attrset-record-is-refused-catchably = {
+      expr = each (d: applied d.step 1) F.records;
+      expected = each (_: false) F.records;
+    };
+    # G2 / R5, and G10-ctl on the guarded rows: a field no step names is admitted.
+    test-an-extra-field-is-admitted-at-every-record-step = {
+      expr = each (d: applied d.step (d.good // unknown)) F.records;
+      expected = each (_: true) F.records;
+    };
+    # G10: each of the options step's own names (from that step's `__contract`), given on the record
+    # instead, is refused. The answer is the names ADMITTED.
+    test-every-option-is-refused-at-every-guarded-record-step = {
+      expr = each (
+        d:
+        builtins.filter (o: applied d.step (d.good // { ${o} = null; })) (
+          F.options.${d.guardedBy}.door.__contract.optional
+        )
+      ) guarded;
+      expected = each (_: [ ]) guarded;
+    };
+    # Every options door on the surface is classified: a chained one has a guarded record row, and
+    # the rest are named as not chained. `surfaceOptionDoors` is pinned as the enumerator's live
+    # control: a walk that found nothing would leave `unclassified` empty too.
+    test-every-options-door-on-the-surface-is-classified = {
+      expr = {
+        unclassified = builtins.filter (
+          n: !(guarded ? ${n}) && !(builtins.elem n F.notChained)
+        ) surfaceOptionDoors;
+        inherit surfaceOptionDoors;
       };
-      test-unknown-option-refused-catchably = {
-        expr =
-          refused
-            (
-              (configGate {
-                gate = _: true;
-                module = { };
-                colr = 1;
-              })
-                { inherit lib; }
-            ).config;
-        expected = true;
+      expected = {
+        unclassified = [ ];
+        surfaceOptionDoors = [
+          "buildSignature"
+          "configGate"
+          "crossEval"
+          "resolveThunks"
+          "wrap"
+          "wrapAll"
+          "wrapIdentity"
+          "contract.mk"
+          "crossing.mkFlakeTerminal"
+        ];
       };
     };
-
-    buildSignature = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused (buildSignature {
-          module = { };
-          bindings = { };
-          defaultMergeStrategy = "bind-wins";
-        });
-        expected = true;
-      };
-      test-unknown-option-refused-catchably = {
-        expr = refused (buildSignature {
-          module = { };
-          bindings = { };
-          defaultMergeStrategy = "bind-wins";
-          mergeStrategies = { };
-          colr = 1;
-        });
-        expected = true;
-      };
-    };
-
-    contract-mk = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused (mk {
-          message = "x";
-        });
-        expected = true;
-      };
-      test-unknown-option-refused-catchably = {
-        expr = refused (mk {
-          check = _: true;
-          colr = 1;
-        });
-        expected = true;
-      };
-    };
-
-    resolveThunks = {
-      test-missing-required-field-refused-catchably = {
-        expr = refused (resolveThunks {
-          config = { };
-          ctx = { };
-          thunkArgNames = [ ];
-        });
-        expected = true;
-      };
-      test-unknown-option-refused-catchably = {
-        expr = refused (resolveThunks {
-          config = { };
-          ctx = { };
-          thunkArgNames = [ ];
-          bindings = { };
-          colr = 1;
-        });
-        expected = true;
-      };
-    };
-
-    mkFlakeTerminal = {
-      # NATIVE-ELLIPSIS class (den-hoag-7gp66, owner-ruled arm (C)): `evalFlakeModule`/
-      # `inputs`/`self` are native required formals now, so a MISSING one is the
-      # evaluator's own uncatchable refusal at the door's own application — `tryEval`
-      # does not contain it (measured), so there is no `expected = true` this group can
-      # hold for that case without crashing the run. The byte-exact native message is
-      # pinned instead, below, in `flake.testsError.door-checks-mixed` — moved from
-      # catchable to native abort, not dropped.
-      test-functionArgs-names-the-required-and-optional-fields = {
-        expr = builtins.functionArgs mkFlakeTerminal;
-        expected = {
-          evalFlakeModule = false;
-          inputs = false;
-          self = false;
-          systems = true;
-        };
-      };
-      test-unknown-option-refused-catchably = {
-        expr = refused (
-          (mkFlakeTerminal {
-            evalFlakeModule = a: m: {
-              config.flake = {
-                seen = a;
-                inherit (m) systems;
-              };
-            };
-            inputs = { };
-            self = "s";
-            colr = 1;
-          }).adapter.wrapUnit
-            [ ]
-            [ ]
-        );
-        expected = true;
-      };
-    };
-
-    # ── record doors: extra field admitted, missing field refused catchably ──
-    stripBindingArgs = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr = stripBindingArgs {
-          module = { };
-          bindingNames = [ ];
-          colr = 1;
-        };
-        expected = { };
-      };
-      test-missing-required-field-refused-catchably = {
-        expr = refused (stripBindingArgs {
-          module = { };
-        });
-        expected = true;
-      };
-    };
-
-    adaptArgs = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr = builtins.isFunction (adaptArgs {
-          adapt = _: { };
-          module = { };
-          colr = 1;
-        });
-        expected = true;
-      };
-      test-missing-required-field-refused-catchably = {
-        expr = refused ((adaptArgs { adapt = _: { }; }) { }).imports;
-        expected = true;
-      };
-    };
-
-    mkMergeValidator = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr = builtins.isFunction (mkMergeValidator {
-          resolvePolicy = _: "bind-wins";
-          boundArgNames = [ ];
-          provenance = { };
-          colr = 1;
-        });
-        expected = true;
-      };
-      test-missing-required-field-refused-catchably = {
-        expr =
-          refused
-            (
-              (mkMergeValidator {
-                resolvePolicy = _: "bind-wins";
-                boundArgNames = [ "a" ];
-              })
-                {
-                  config._module.args = {
-                    a = 1;
-                  };
-                }
-            ).warnings;
-        expected = true;
-      };
-    };
-
-    crossing-environment = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr = environment {
-          unit = "igloo";
-          crossings = [ ];
-          projection = { };
-          colr = 1;
-        };
-        expected = [ ];
-      };
-      test-missing-required-field-refused-catchably = {
-        expr = refused (environment {
-          unit = "igloo";
-          crossings = [ ];
-        });
-        expected = true;
-      };
-    };
-
-    crossing-coherence = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr = coherence {
-          unit = "igloo";
-          crossings = [ ];
-          projection = { };
-          linkset = {
-            members = [ ];
-          };
-          colr = 1;
-        };
-        expected = {
-          __crossingResult = "ok";
-          value = [ ];
-        };
-      };
-      test-missing-required-field-refused-catchably = {
-        expr = refused (coherence {
-          unit = "igloo";
-          crossings = [ ];
-          projection = { };
-        });
-        expected = true;
-      };
-    };
-
-    crossing-placement = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr = placement {
-          staticityAdmissible = true;
-          deltaExact = "EXACT";
-          adapter = {
-            bindFormals = _: _: { };
-          };
-          name = "db";
-          colr = 1;
-        };
-        expected = {
-          __crossingResult = "ok";
-          value = {
-            channel = "Formals";
-            time = "Substrate";
-          };
-        };
-      };
-      test-missing-required-field-refused-catchably = {
-        expr = refused (placement {
-          staticityAdmissible = true;
-          deltaExact = "EXACT";
-          adapter = {
-            bindFormals = _: _: { };
-          };
-        });
-        expected = true;
-      };
-    };
-
-    crossing-mkHostedTerminal = {
-      test-extra-field-on-a-record-is-admitted = {
-        expr =
-          builtins.isFunction
-            (mkHostedTerminal {
-              evaluator = _: { };
-              locateConfig = _: { };
-              class = "host";
-              colr = 1;
-            }).adapter;
-        expected = true;
-      };
-      test-missing-required-field-refused-catchably = {
-        expr = refused (mkHostedTerminal {
-          evaluator = _: { };
-          locateConfig = _: { };
-        });
-        expected = true;
-      };
+    test-every-record-step-publishes-the-row-as-its-contract = {
+      expr = each (d: {
+        inherit (d.step.__contract) required open;
+        functionArgs = prelude.functionArgs d.step;
+      }) F.records;
+      expected = each (d: {
+        inherit (d) required;
+        open = true;
+        functionArgs = flag false d.required;
+      }) F.records;
     };
   };
 
-  # Every refusal names the door first and the construct last (R6).
-  flake.testsError = {
-    door-checks-mixed = {
-      test-wrapIdentity-missing-field-named = {
-        expr = wrapIdentity {
-          class = "nixos";
-          module = { };
-        };
-        expectedError = missingPin "gen-bind[.]wrapIdentity" "identity" "'class', 'module', 'identity'";
-      };
-      test-wrapIdentity-unknown-option-named = {
-        expr = wrapIdentity {
-          class = "nixos";
-          module = { };
-          identity = "x";
-          colr = 1;
-        };
-        expectedError = unknownPin "gen-bind[.]wrapIdentity" "'class', 'module', 'identity', 'isAnon'";
-      };
-
-      test-crossEval-missing-field-named = {
-        expr = (crossEval { inherit lib; }).config;
-        expectedError = missingPin "gen-bind[.]crossEval" "module" "'lib', 'module'";
-      };
-      test-crossEval-unknown-option-named = {
-        expr =
-          (crossEval {
-            inherit lib;
-            module = { };
-            colr = 1;
-          }).config;
-        expectedError = unknownPin "gen-bind[.]crossEval" "'lib', 'module', 'specialArgs', 'moduleArgs', 'absorb'";
-      };
-
-      test-configGate-missing-field-named = {
-        expr = ((configGate { gate = _: true; }) { inherit lib; }).config;
-        expectedError = missingPin "gen-bind[.]configGate" "module" "'gate', 'module'";
-      };
-      test-configGate-unknown-option-named = {
-        expr =
-          (
-            (configGate {
-              gate = _: true;
-              module = { };
-              colr = 1;
-            })
-              { inherit lib; }
-          ).config;
-        expectedError = unknownPin "gen-bind[.]configGate" "'gate', 'module', 'adapt', 'absorb'";
-      };
-
-      test-buildSignature-missing-field-named = {
-        expr = buildSignature {
-          module = { };
-          bindings = { };
-          defaultMergeStrategy = "bind-wins";
-        };
-        expectedError =
-          missingPin "gen-bind[.]buildSignature" "mergeStrategies"
-            "'module', 'bindings', 'defaultMergeStrategy', 'mergeStrategies'";
-      };
-      test-buildSignature-unknown-option-named = {
-        expr = buildSignature {
-          module = { };
-          bindings = { };
-          defaultMergeStrategy = "bind-wins";
-          mergeStrategies = { };
-          colr = 1;
-        };
-        expectedError = unknownPin "gen-bind[.]buildSignature" "'module', 'bindings', 'defaultMergeStrategy', 'mergeStrategies', 'provenance', 'vocabulary'";
-      };
-
-      test-contractMk-missing-field-named = {
-        expr = mk { message = "x"; };
-        expectedError = missingPin "gen-bind[.]contract[.]mk" "check" "'check'";
-      };
-      test-contractMk-unknown-option-named = {
-        expr = mk {
-          check = _: true;
-          colr = 1;
-        };
-        expectedError = unknownPin "gen-bind[.]contract[.]mk" "'check', 'message', 'blame'";
-      };
-
-      test-resolveThunks-missing-field-named = {
-        expr = resolveThunks {
-          config = { };
-          ctx = { };
-          thunkArgNames = [ ];
-        };
-        expectedError =
-          missingPin "gen-bind[.]resolveThunks" "bindings"
-            "'config', 'ctx', 'thunkArgNames', 'bindings'";
-      };
-      test-resolveThunks-unknown-option-named = {
-        expr = resolveThunks {
-          config = { };
-          ctx = { };
-          thunkArgNames = [ ];
-          bindings = { };
-          colr = 1;
-        };
-        expectedError = unknownPin "gen-bind[.]resolveThunks" "'config', 'ctx', 'thunkArgNames', 'bindings', 'producerConfigs'";
-      };
-
-      # Moved from catchable to native abort (arm (C)): `inputs` is a native required
-      # formal now, so its absence is the evaluator's own refusal at the door's own
-      # application — no `.adapter.wrapUnit` forcing needed to provoke it.
-      test-mkFlakeTerminal-missing-field-named = {
-        expr = mkFlakeTerminal {
-          evalFlakeModule = a: m: {
-            config.flake = {
-              seen = a;
-              inherit (m) systems;
-            };
-          };
-          self = "s";
-        };
-        expectedError = nativeMissingPin "mkFlakeTerminal" "inputs";
-      };
-      test-mkFlakeTerminal-unknown-option-named = {
-        expr =
-          (mkFlakeTerminal {
-            evalFlakeModule = a: m: {
-              config.flake = {
-                seen = a;
-                inherit (m) systems;
-              };
-            };
-            inputs = { };
-            self = "s";
-            colr = 1;
-          }).adapter.wrapUnit
-            [ ]
-            [ ];
-        expectedError = unknownPin "gen-bind[.]crossing[.]mkFlakeTerminal" "'evalFlakeModule', 'inputs', 'self', 'systems'";
-      };
-    };
-
-    door-checks-record = {
-      test-stripBindingArgs-missing-field-named = {
-        expr = stripBindingArgs { module = { }; };
-        expectedError = missingPin "gen-bind[.]stripBindingArgs" "bindingNames" "'module', 'bindingNames'";
-      };
-      test-adaptArgs-missing-field-named = {
-        expr = ((adaptArgs { adapt = _: { }; }) { }).imports;
-        expectedError = missingPin "gen-bind[.]adaptArgs" "module" "'adapt', 'module'";
-      };
-      test-mkMergeValidator-missing-field-named = {
-        expr =
-          (
-            (mkMergeValidator {
-              resolvePolicy = _: "bind-wins";
-              boundArgNames = [ "a" ];
-            })
-              {
-                config._module.args = {
-                  a = 1;
-                };
-              }
-          ).warnings;
-        expectedError =
-          missingPin "gen-bind[.]mkMergeValidator" "provenance"
-            "'resolvePolicy', 'boundArgNames', 'provenance'";
-      };
-      test-environment-missing-field-named = {
-        expr = environment {
-          unit = "igloo";
-          crossings = [ ];
-        };
-        expectedError =
-          missingPin "gen-bind[.]crossing[.]environment" "projection"
-            "'unit', 'crossings', 'projection'";
-      };
-      test-coherence-missing-field-named = {
-        expr = coherence {
-          unit = "igloo";
-          crossings = [ ];
-          projection = { };
-        };
-        expectedError =
-          missingPin "gen-bind[.]crossing[.]coherence" "linkset"
-            "'unit', 'crossings', 'projection', 'linkset'";
-      };
-      test-placement-missing-field-named = {
-        expr = placement {
-          staticityAdmissible = true;
-          deltaExact = "EXACT";
-          adapter = {
-            bindFormals = _: _: { };
-          };
-        };
-        expectedError =
-          missingPin "gen-bind[.]crossing[.]placement" "name"
-            "'staticityAdmissible', 'deltaExact', 'adapter', 'name'";
-      };
-      test-mkHostedTerminal-missing-field-named = {
-        expr = mkHostedTerminal {
-          evaluator = _: { };
-          locateConfig = _: { };
-        };
-        expectedError =
-          missingPin "gen-bind[.]crossing[.]mkHostedTerminal" "class"
-            "'evaluator', 'locateConfig', 'class'";
-      };
-    };
-  };
+  flake.testsError.door-checks =
+    lib.concatMapAttrs optionGoldens F.options // lib.concatMapAttrs recordGoldens F.records;
 }

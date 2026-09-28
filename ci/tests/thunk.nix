@@ -35,7 +35,7 @@ in
   };
 
   flake.tests.thunk.test-resolveThunks-resolves-list = {
-    expr = resolveThunks {
+    expr = resolveThunks { } {
       config = {
         networking.hostName = "igloo";
       };
@@ -61,7 +61,7 @@ in
   };
 
   flake.tests.thunk.test-resolveThunks-passes-ctx-args = {
-    expr = resolveThunks {
+    expr = resolveThunks { } {
       config = { };
       ctx = {
         host = {
@@ -81,7 +81,7 @@ in
   };
 
   flake.tests.thunk.test-resolveThunks-skips-non-thunk-args = {
-    expr = resolveThunks {
+    expr = resolveThunks { } {
       config = { };
       ctx = { };
       thunkArgNames = [ "data" ];
@@ -107,23 +107,27 @@ in
   # consumer's config. Here the producer (iceberg) and consumer (igloo) disagree
   # on networking.hostName; with producerConfigs the thunk reads the producer's.
   flake.tests.thunk.test-resolveThunks-producer-scoped-reads-producer-config = {
-    expr = resolveThunks {
-      config = {
-        networking.hostName = "igloo";
-      };
-      ctx = { };
-      thunkArgNames = [ "data" ];
-      producerConfigs = {
-        "host=iceberg" = {
-          networking.hostName = "iceberg";
+    expr =
+      resolveThunks
+        {
+          producerConfigs = {
+            "host=iceberg" = {
+              networking.hostName = "iceberg";
+            };
+          };
+        }
+        {
+          config = {
+            networking.hostName = "igloo";
+          };
+          ctx = { };
+          thunkArgNames = [ "data" ];
+          bindings = {
+            data = [
+              (mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
+            ];
+          };
         };
-      };
-      bindings = {
-        data = [
-          (mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
-        ];
-      };
-    };
     expected = {
       data = [ "h-iceberg" ];
     };
@@ -133,13 +137,13 @@ in
   # resolution. A __sourceScope-tagged thunk with NO producerConfigs supplied
   # resolves against the consumer config exactly as a plain mkThunk would.
   flake.tests.thunk.test-resolveThunks-default-empty-is-consumer-scoped = {
-    expr = resolveThunks {
+    # producerConfigs omitted ⇒ defaults to {}
+    expr = resolveThunks { } {
       config = {
         networking.hostName = "igloo";
       };
       ctx = { };
       thunkArgNames = [ "data" ];
-      # producerConfigs omitted ⇒ defaults to {}
       bindings = {
         data = [
           (mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
@@ -155,23 +159,27 @@ in
   # producerConfigs ⇒ fall back to the consumer config (byte-identical). Only a
   # scope the caller actually supplied redirects resolution.
   flake.tests.thunk.test-resolveThunks-unknown-scope-falls-back-to-consumer = {
-    expr = resolveThunks {
-      config = {
-        networking.hostName = "igloo";
-      };
-      ctx = { };
-      thunkArgNames = [ "data" ];
-      producerConfigs = {
-        "host=other" = {
-          networking.hostName = "other";
+    expr =
+      resolveThunks
+        {
+          producerConfigs = {
+            "host=other" = {
+              networking.hostName = "other";
+            };
+          };
+        }
+        {
+          config = {
+            networking.hostName = "igloo";
+          };
+          ctx = { };
+          thunkArgNames = [ "data" ];
+          bindings = {
+            data = [
+              (mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
+            ];
+          };
         };
-      };
-      bindings = {
-        data = [
-          (mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
-        ];
-      };
-    };
     expected = {
       data = [ "h-igloo" ];
     };
@@ -180,23 +188,27 @@ in
   # A null-scope thunk (plain mkThunk) ignores producerConfigs entirely and
   # resolves against the consumer config, even when producerConfigs is non-empty.
   flake.tests.thunk.test-resolveThunks-null-scope-ignores-producerConfigs = {
-    expr = resolveThunks {
-      config = {
-        networking.hostName = "igloo";
-      };
-      ctx = { };
-      thunkArgNames = [ "data" ];
-      producerConfigs = {
-        "host=iceberg" = {
-          networking.hostName = "iceberg";
+    expr =
+      resolveThunks
+        {
+          producerConfigs = {
+            "host=iceberg" = {
+              networking.hostName = "iceberg";
+            };
+          };
+        }
+        {
+          config = {
+            networking.hostName = "igloo";
+          };
+          ctx = { };
+          thunkArgNames = [ "data" ];
+          bindings = {
+            data = [
+              (mkThunk ({ config, ... }: [ config.networking.hostName ]))
+            ];
+          };
         };
-      };
-      bindings = {
-        data = [
-          (mkThunk ({ config, ... }: [ config.networking.hostName ]))
-        ];
-      };
-    };
     expected = {
       data = [ "igloo" ];
     };
@@ -214,23 +226,27 @@ in
   flake.tests.thunk.test-resolveThunks-producer-error-propagates-loud = {
     expr =
       (builtins.tryEval (
-        builtins.deepSeq (resolveThunks {
-          config = {
-            networking.hostName = "igloo"; # consumer value would resolve fine
-          };
-          ctx = { };
-          thunkArgNames = [ "data" ];
-          producerConfigs = {
-            "host=iceberg" = {
-              networking.hostName = throw "producer-config forced";
+        builtins.deepSeq (resolveThunks
+          {
+            producerConfigs = {
+              "host=iceberg" = {
+                networking.hostName = throw "producer-config forced";
+              };
             };
-          };
-          bindings = {
-            data = [
-              (mkThunkFrom "host=iceberg" ({ config, ... }: [ config.networking.hostName ]))
-            ];
-          };
-        }) null
+          }
+          {
+            config = {
+              networking.hostName = "igloo"; # consumer value would resolve fine
+            };
+            ctx = { };
+            thunkArgNames = [ "data" ];
+            bindings = {
+              data = [
+                (mkThunkFrom "host=iceberg" ({ config, ... }: [ config.networking.hostName ]))
+              ];
+            };
+          }
+        ) null
       )).success;
     expected = false;
   };
@@ -245,23 +261,27 @@ in
     expr = (
       builtins.tryEval (
         let
-          r = resolveThunks {
-            config = {
-              networking.hostName = "igloo";
-            };
-            ctx = { };
-            thunkArgNames = [ "data" ];
-            producerConfigs = {
-              "host=iceberg" = {
-                networking.hostName = "iceberg";
+          r =
+            resolveThunks
+              {
+                producerConfigs = {
+                  "host=iceberg" = {
+                    networking.hostName = "iceberg";
+                  };
+                };
+              }
+              {
+                config = {
+                  networking.hostName = "igloo";
+                };
+                ctx = { };
+                thunkArgNames = [ "data" ];
+                bindings = {
+                  data = [
+                    (mkThunkFrom { host = "iceberg"; } ({ config, ... }: [ config.networking.hostName ]))
+                  ];
+                };
               };
-            };
-            bindings = {
-              data = [
-                (mkThunkFrom { host = "iceberg"; } ({ config, ... }: [ config.networking.hostName ]))
-              ];
-            };
-          };
         in
         builtins.deepSeq r r
       )

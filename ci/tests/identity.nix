@@ -7,12 +7,8 @@ in
   flake.tests.identity.test-named-produces-key-and-file = {
     expr =
       let
-        result = wrapIdentity {
-          class = "nixos";
-          module = {
-            x = 1;
-          };
-          identity = "postgres";
+        result = wrapIdentity { } "nixos" "postgres" {
+          x = 1;
         };
       in
       {
@@ -29,12 +25,8 @@ in
 
   flake.tests.identity.test-named-key-format = {
     expr =
-      (wrapIdentity {
-        class = "nixos";
-        module = {
-          x = 1;
-        };
-        identity = "postgres";
+      (wrapIdentity { } "nixos" "postgres" {
+        x = 1;
       }).key;
     expected = "nixos@postgres";
   };
@@ -42,14 +34,16 @@ in
   flake.tests.identity.test-anon-uses-setDefaultModuleLocation = {
     expr =
       let
-        result = wrapIdentity {
-          class = "nixos";
-          module = {
-            x = 1;
-          };
-          identity = "anon";
-          isAnon = true;
-        };
+        result =
+          wrapIdentity
+            {
+              isAnon = true;
+            }
+            "nixos"
+            "anon"
+            {
+              x = 1;
+            };
       in
       builtins.isAttrs result;
     expected = true;

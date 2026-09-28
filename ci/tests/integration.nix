@@ -38,23 +38,26 @@ in
   flake.tests.integration.test-wrap-evalmodules-roundtrip = {
     expr =
       let
-        result = wrap {
-          module =
+        result =
+          wrap
             {
-              host,
-              config,
-              lib,
-              ...
-            }:
-            {
-              networking.hostName = host.name;
-            };
-          bindings = {
-            host = {
-              name = "igloo";
-            };
-          };
-        };
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+              };
+            }
+            (
+              {
+                host,
+                config,
+                lib,
+                ...
+              }:
+              {
+                networking.hostName = host.name;
+              }
+            );
         evaluated = evalWith [ result.module ];
       in
       evaluated.config.networking.hostName;
@@ -64,18 +67,21 @@ in
   flake.tests.integration.test-fully-applied-in-evalmodules = {
     expr =
       let
-        result = wrap {
-          module =
-            { host }:
+        result =
+          wrap
             {
-              networking.hostName = host.name;
-            };
-          bindings = {
-            host = {
-              name = "iceberg";
-            };
-          };
-        };
+              bindings = {
+                host = {
+                  name = "iceberg";
+                };
+              };
+            }
+            (
+              { host }:
+              {
+                networking.hostName = host.name;
+              }
+            );
         evaluated = evalWith [ result.module ];
       in
       evaluated.config.networking.hostName;
@@ -86,17 +92,20 @@ in
     expr =
       let
         thunkValue = mkThunk ({ config, ... }: config.networking.hostName);
-        result = wrap {
-          module =
-            { mydata, config, ... }:
+        result =
+          wrap
             {
-              networking.domain = builtins.head mydata;
-            };
-          bindings = {
-            mydata = [ thunkValue ];
-          };
-          thunkBindings = [ "mydata" ];
-        };
+              bindings = {
+                mydata = [ thunkValue ];
+              };
+              thunkBindings = [ "mydata" ];
+            }
+            (
+              { mydata, config, ... }:
+              {
+                networking.domain = builtins.head mydata;
+              }
+            );
         evaluated = evalWith [
           result.module
           { networking.hostName = "igloo"; }
@@ -112,19 +121,11 @@ in
   flake.tests.integration.test-identity-dedup = {
     expr =
       let
-        mod1 = wrapIdentity {
-          class = "nixos";
-          module = {
-            x = 1;
-          };
-          identity = "test";
+        mod1 = wrapIdentity { } "nixos" "test" {
+          x = 1;
         };
-        mod2 = wrapIdentity {
-          class = "nixos";
-          module = {
-            networking.hostName = "deduped-away";
-          };
-          identity = "test";
+        mod2 = wrapIdentity { } "nixos" "test" {
+          networking.hostName = "deduped-away";
         };
         evaluated = evalWith [
           mod1
@@ -146,22 +147,24 @@ in
   flake.tests.integration.test-wrapAll-batch = {
     expr =
       let
-        result = wrapAll {
-          modules = [
-            (
-              { host, config, ... }:
-              {
-                networking.hostName = host.name;
-              }
-            )
-            { networking.domain = "local"; }
-          ];
-          bindings = {
-            host = {
-              name = "igloo";
-            };
-          };
-        };
+        result =
+          wrapAll
+            {
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+              };
+            }
+            [
+              (
+                { host, config, ... }:
+                {
+                  networking.hostName = host.name;
+                }
+              )
+              { networking.domain = "local"; }
+            ];
         evaluated = evalWith result.modules;
       in
       {
@@ -179,20 +182,23 @@ in
     expr =
       let
         thunkValue = mkThunk ({ host, ... }: [ host.name ]);
-        result = wrap {
-          module =
-            { mydata, config, ... }:
+        result =
+          wrap
             {
-              networking.domain = builtins.head mydata;
-            };
-          bindings = {
-            host = {
-              name = "igloo";
-            };
-            mydata = [ thunkValue ];
-          };
-          thunkBindings = [ "mydata" ];
-        };
+              bindings = {
+                host = {
+                  name = "igloo";
+                };
+                mydata = [ thunkValue ];
+              };
+              thunkBindings = [ "mydata" ];
+            }
+            (
+              { mydata, config, ... }:
+              {
+                networking.domain = builtins.head mydata;
+              }
+            );
         evaluated = evalWith [ result.module ];
       in
       evaluated.config.networking.domain;

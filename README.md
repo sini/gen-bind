@@ -109,11 +109,10 @@ module does not demand, so unbuilt hosts carry zero binding cost.
     in {
       # Wrap a module with external bindings
       wrappedModule = (genBind.wrap {
-        module = { host, config, lib, ... }: {
-          networking.hostName = host.name;
-        };
         bindings = { host = { name = "igloo"; }; };
-      }).module;
+      } ({ host, config, lib, ... }: {
+          networking.hostName = host.name;
+        })).module;
     };
 }
 ```
@@ -125,13 +124,12 @@ let
   # prelude = gen-prelude's lib, e.g. import "${gen-prelude}/lib"
   genBind = import ./path/to/gen-bind/lib { inherit prelude; };
   result = genBind.wrap {
-    module = { host, pkgs, config, ... }: {
-      environment.systemPackages = [ pkgs.git ];
-      networking.hostName = host.name;
-    };
     bindings = { host = { name = "igloo"; }; };
     # pkgs comes from evalModules specialArgs — wrap only injects `host`
-  };
+  } ({ host, pkgs, config, ... }: {
+      environment.systemPackages = [ pkgs.git ];
+      networking.hostName = host.name;
+    });
 in result.module  # function: { pkgs, config, ... } -> { ... }
 ```
 
@@ -153,11 +151,10 @@ in
 
 ```nix
 result = genBind.wrap {
-  module = { host, config, lib, ... }: {
-    networking.hostName = host.name;
-  };
   bindings = { host = { name = "igloo"; }; extraUnused = "ignored"; };
-};
+} ({ host, config, lib, ... }: {
+    networking.hostName = host.name;
+  });
 
 # result.module   — partially applied: { config, lib, ... } -> { ... }
 # result.wrapped  — true
@@ -180,14 +177,13 @@ When a binding name collides with a module-system arg (e.g., both gen-bind and `
 
 ```nix
 result = genBind.wrap {
-  module = { lib, host, ... }: { networking.hostName = host.name; };
   bindings = { host = { name = "igloo"; }; lib = myCustomLib; };
   mergeStrategies = {
     lib = genBind.mergeStrategy.systemWins;  # module-system lib wins
     # or: genBind.mergeStrategy.bindWins (default)
     # or: genBind.mergeStrategy.error (throw at eval time)
   };
-};
+} ({ lib, host, ... }: { networking.hostName = host.name; });
 ```
 
 The default strategy is `bindWins` — binding shadows the module-system arg. Set `_mergeStrategy` directly on a binding value as an inline annotation:
@@ -208,9 +204,6 @@ Some bindings depend on the `evalModules` fixpoint — they can't be computed un
 
 ```nix
 result = genBind.wrap {
-  module = { extraModules, config, ... }: {
-    imports = extraModules;
-  };
   bindings = {
     extraModules = [
       # Static entry
@@ -219,7 +212,9 @@ result = genBind.wrap {
       (genBind.mkThunk ({ config }: lib.optional config.services.nginx.enable nginxExtraModule))
     ];
   };
-};
+} ({ extraModules, config, ... }: {
+    imports = extraModules;
+  });
 ```
 
 Thunks travel as markers (`{ __configThunk = true; __fn = fn; }`) through the binding pipeline and resolve inside the module wrapper when `evalModules` provides `config`. Only list-valued bindings are auto-detected for thunks. Non-list bindings with thunks require explicit `thunkBindings = [ "argName" ]`.
@@ -232,18 +227,17 @@ By default a thunk resolves against the `config` of the terminal that *consumes*
 
 ```nix
 result = genBind.wrap {
-  module = { peers, config, ... }: { networking.domain = builtins.head peers; };
   bindings = {
     peers = [
       # Produced at iceberg, consumed at igloo. __sourceScope = "host=iceberg".
       (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
     ];
   };
-  # Resolve the thunk against iceberg's terminal config, not igloo's:
   producerConfigs = {
     "host=iceberg" = icebergTerminalConfig;  # a lazy ref to the producer's config
   };
-};
+  # Resolve the thunk against iceberg's terminal config, not igloo's:
+} ({ peers, config, ... }: { networking.domain = builtins.head peers; });
 ```
 
 - **Opaque + general.** gen-bind does one lazy attrset index (`producerConfigs.${thunk.__sourceScope}`); it knows nothing about scopes, classes, or hosts. The consumer builds the map and chooses the key encoding — a scope with multiple class terminals (e.g. a host's `nixos` vs a user-cell's `home-manager`) must qualify the key so each thunk's `__sourceScope` selects the right terminal.
@@ -260,18 +254,17 @@ Contracts are assertions that fire when the bound value is demanded — preservi
 
 ```nix
 result = genBind.wrap {
-  module = { host, ... }: { networking.hostName = host.name; };
   bindings = { host = { name = "igloo"; }; };
   contracts = {
     host = genBind.contract.hasFields [ "name" "system" ];
     # or: genBind.contract.isType "set"
     # or: genBind.contract.nonEmpty
-    # or: genBind.contract.mk { check = v: v.name != ""; message = "host must have non-empty name"; }
+    # or: genBind.contract.mk { message = "host must have non-empty name"; } (v: v.name != "")
   };
   provenance = {
     host = { source = "entity-context"; scope = "host=igloo"; };
   };
-};
+} ({ host, ... }: { networking.hostName = host.name; });
 ```
 
 Contract violations include the message and provenance:
@@ -288,12 +281,11 @@ Provenance metadata on the `wrap` call surfaces in all blame messages — collis
 
 ```nix
 genBind.wrap {
-  module = myModule;
   bindings = { host = hostVal; };
   provenance = {
     host = { source = "scope-policy"; scope = "host=igloo,user=tux"; };
   };
-};
+} myModule;
 ```
 
 `provenance.format prov` formats a provenance record to a string (`"provided by 'scope-policy' at scope 'host=igloo,user=tux'"`) or returns `""` for `null`.
@@ -334,7 +326,7 @@ cfg = genBind.composeWith [
 ];
 # cfg.bindings, cfg.provenance, cfg.contracts, cfg.mergeStrategies — all merged
 
-result = genBind.wrap (cfg // { module = myModule; });
+result = genBind.wrap cfg myModule;
 ```
 
 ### Identity Wrapping
@@ -342,12 +334,8 @@ result = genBind.wrap (cfg // { module = myModule; });
 NixOS deduplicates modules by `key`. `wrapIdentity` stamps a stable key onto a wrapped module so that re-emitting the same module at the same identity doesn't duplicate it in `evalModules`:
 
 ```nix
-keyed = genBind.wrapIdentity {
-  class = "nixos";
-  module = result.module;
-  identity = "host=igloo";
-  # isAnon = false;  # default: sets key + _file + imports wrapper
-};
+keyed = genBind.wrapIdentity { } "nixos" "host=igloo" result.module;
+# { isAnon = false; } is the default: sets key + _file + imports wrapper
 # keyed -> { key = "nixos@host=igloo"; _file = "nixos@host=igloo"; imports = [ result.module ]; }
 ```
 
@@ -358,10 +346,7 @@ Set `isAnon = true` to stamp only `_file` (via the vendored `setDefaultModuleLoc
 After wrapping, binding arg names must be removed from the module's advertised args. Otherwise `evalModules` probes `_module.args.<name>` for every advertised arg and crashes when the key doesn't exist.
 
 ```nix
-stripped = genBind.stripBindingArgs {
-  module = result.module;
-  bindingNames = [ "host" ];
-};
+stripped = genBind.stripBindingArgs [ "host" ] result.module;
 ```
 
 Works on both function modules and attrset modules with `__functionArgs`. Args not present in the module's advertised interface are silently skipped.
@@ -372,11 +357,10 @@ Works on both function modules and attrset modules with `__functionArgs`. Args n
 
 ```nix
 batch = genBind.wrapAll {
-  modules = [ modA modB modC ];
   bindings = sharedBindings;
   contracts = sharedContracts;
   provenance = sharedProv;
-};
+} [ modA modB modC ];
 
 # batch.modules    — list of wrapped modules
 # batch.validators — list of non-null validators (one per wrapped function module)
@@ -391,26 +375,19 @@ batch = genBind.wrapAll {
 ```nix
 # adaptArgs — inject `_module.args = adapt args` alongside a placed slice (the in-module
 # arg-env channel). `adapt` reads the crossing args (config/pkgs/lib/specialArgs).
-adaptedModule = genBind.adaptArgs {
-  adapt = args: { allModuleArgs = args.config.allModuleArgs; };
-  module = placedSlice;
-};
+adaptedModule = genBind.adaptArgs (args: { allModuleArgs = args.config.allModuleArgs; }) placedSlice;
 
 # crossEval — resolve an OPAQUE slice through a nested evalModules in the TERMINAL's own
 # evaluator (`lib` threaded in), threading a rewritten `specialArgs` env + a freeform
 # absorber. Returns the eval result; read `.config`.
 resolved = (genBind.crossEval {
-  inherit (args) lib;
-  module = sliceMod;
   specialArgs = adaptedSpecialArgs;
-}).config;
+} args.lib sliceMod).config;
 
 # configGate — gate a slice's nested-eval'd CONFIG on an eval-time predicate via `mkIf`.
 gated = genBind.configGate {
-  gate = args: args.options ? wsl;   # eval-time read of the terminal option-set
-  module = placedSlice;
   adapt = args: { extra = args.pkgs.hello; };  # optional _module.args threading
-};
+} (args: args.options ? wsl) placedSlice;   # the gate: an eval-time read of the terminal option-set
 ```
 
 **The two arg-env channels.** `_module.args` is the only channel a module can write from *inside* the eval (`adaptArgs`); `specialArgs` is caller-only, so rewriting it means *owning* the `evalModules` call — which is what `crossEval` is for.
@@ -495,8 +472,8 @@ unit   = ops.close "igloo" reg.value.projection { members = [ "igloo" "iceberg" 
 
 ```nix
 b.crossing.injectAdapter                                    # -> Adapter
-b.crossing.mkHostedTerminal { evaluator, locateConfig }      # -> { adapter = carriage -> Adapter; locateConfig; }
-b.crossing.mkFlakeTerminal { evalFlakeModule, inputs, self, systems ? [] }
+b.crossing.mkHostedTerminal { evaluator; locateConfig; class; }  # -> { adapter = carriage -> Adapter; locateConfig; }
+b.crossing.mkFlakeTerminal { systems ? []; } { evalFlakeModule; inputs; self; }
                                                             # -> { adapter = Adapter; locateConfig = null; }
 ```
 
@@ -516,15 +493,19 @@ b.crossing.mkFlakeTerminal { evalFlakeModule, inputs, self, systems ? [] }
 
 ```nix
 wrap {
-  module,                          # function | { imports = [...]; } | attrset
   bindings ? {},                   # { name = value; } — external values to inject
   contracts ? {},                  # { name = contract; } — lazy assertions per binding
   provenance ? {},                 # { name = { source; scope?; }; } — blame metadata
   mergeStrategies ? {},            # { name = strategy; } — per-arg collision resolution
   defaultMergeStrategy ? bindWins, # fallback strategy for unspecified args
   thunkBindings ? [],              # explicit list of list-valued args containing thunks
-}
+  producerConfigs ? {},            # scopeKey -> config, for producer-scoped thunks
+} module                           # function | { imports = [...]; } | attrset
 ```
+
+The options come first, as one closed set: a misspelt option is refused by name, catchably, when
+`wrap opts` is formed (`prelude.door`; `wrap.__contract` publishes the set). The module is the
+subject, last.
 
 Returns `{ module; wrapped; validator; signature; advertisedArgs }`.
 
@@ -538,14 +519,14 @@ Returns `{ module; wrapped; validator; signature; advertisedArgs }`.
 
 ```nix
 wrapAll {
-  modules,          # list of modules
   bindings ? {},
   contracts ? {},
   provenance ? {},
   mergeStrategies ? {},
   defaultMergeStrategy ? bindWins,
   thunkBindings ? [],
-}
+  producerConfigs ? {},
+} modules           # list of modules
 ```
 
 Contracts are pre-computed once and shared across all modules. Returns `{ modules; validators; signatures; all }`.
@@ -582,7 +563,7 @@ Returns `true` if `value` is a thunk created by `mkThunk` or `mkThunkFrom`.
 ### `resolveThunks`
 
 ```nix
-resolveThunks { config; ctx; thunkArgNames; bindings; producerConfigs ? {}; }
+resolveThunks { producerConfigs ? {}; } { config; ctx; thunkArgNames; bindings; }
 ```
 
 Resolves thunks within list-valued bindings. For each arg name in `thunkArgNames` whose binding is a list, expands thunk entries by calling `__fn` with `config` and matching `ctx` args. Non-thunk entries and non-list args pass through unchanged.
@@ -592,7 +573,7 @@ Resolves thunks within list-valued bindings. For each arg name in `thunkArgNames
 ### `contract.mk`
 
 ```nix
-contract.mk { check; message ? "contract violation"; blame ? null; }
+contract.mk { message ? "contract violation"; blame ? null; } check
 ```
 
 Creates a contract. `check` is `value -> bool`. `blame` is an optional string added to the error message.
@@ -672,7 +653,7 @@ Structured composition across all four binding fields. Returns `{ bindings; prov
 ### `wrapIdentity`
 
 ```nix
-wrapIdentity { class; module; identity; isAnon ? false; }
+wrapIdentity { isAnon ? false; } class identity module
 ```
 
 Stamps a stable NixOS module key onto a module. Non-anon: returns `{ key = "${class}@${identity}"; _file = ...; imports = [ module ]; }`. Anon: applies the vendored `setDefaultModuleLocation` convention helper instead.
@@ -680,7 +661,7 @@ Stamps a stable NixOS module key onto a module. Non-anon: returns `{ key = "${cl
 ### `stripBindingArgs`
 
 ```nix
-stripBindingArgs { module; bindingNames; }
+stripBindingArgs bindingNames module
 ```
 
 Removes `bindingNames` from the module's advertised formal args. Works on function modules and attrset modules with `__functionArgs`. Returns the module unchanged if no args match or the module shape doesn't support stripping.
@@ -688,7 +669,7 @@ Removes `bindingNames` from the module's advertised formal args. Works on functi
 ### `buildSignature`
 
 ```nix
-buildSignature { module; bindings; defaultMergeStrategy; mergeStrategies; provenance ? {}; vocabulary ? null; }
+buildSignature { provenance ? {}; vocabulary ? null; } { module; bindings; defaultMergeStrategy; mergeStrategies; }
 ```
 
 Computes a signature record: `{ requires; bound; unsatisfied; declaredMergeStrategies }`.
@@ -701,7 +682,7 @@ Computes a signature record: `{ requires; bound; unsatisfied; declaredMergeStrat
 ### `adaptArgs`
 
 ```nix
-adaptArgs { adapt, module }  # -> terminalArgs -> module
+adaptArgs adapt module  # -> terminalArgs -> module
 ```
 
 Returns a terminal module-function that, at the `evalModules` crossing, injects `_module.args = adapt args` (visible to every sibling module) and imports `module`. `adapt : crossingArgs -> attrset` derives the extended arg environment from the terminal args (`config`/`options`/`pkgs`/`lib`/`specialArgs`). `_module.args` is the only arg-env channel a module can write from inside the eval. Laziness: `adapt` and `module` are forced only when the returned function is applied by `evalModules`.
@@ -709,7 +690,7 @@ Returns a terminal module-function that, at the `evalModules` crossing, injects 
 ### `crossEval`
 
 ```nix
-crossEval { lib, module, specialArgs ? {}, moduleArgs ? null, absorb ? true }  # -> evalModules result
+crossEval { specialArgs ? {}; moduleArgs ? null; absorb ? true; } lib module  # -> evalModules result
 ```
 
 Resolves an **opaque** `module` through a fresh nested `evalModules` in the terminal's own evaluator (`lib` threaded in — gen-bind imports no `nixpkgs.lib`), returning the eval result (read `.config`). This is what the `specialArgs` arg-env channel requires: `specialArgs` is caller-only, so rewriting it means owning the `evalModules` call.
@@ -723,7 +704,7 @@ Laziness: `evalModules` builds config lazily; the result is a WHNF attrset and n
 ### `configGate`
 
 ```nix
-configGate { gate, module, adapt ? (_: {}), absorb ? true }  # -> terminalArgs -> module
+configGate { adapt ? (_: {}); absorb ? true; } gate module  # -> terminalArgs -> module
 ```
 
 Returns a terminal module-function that resolves `module` in a nested `crossEval` (threading `adapt args` as its `_module.args`) and contributes the result via `mkIf (gate args) nested.config`. `gate : crossingArgs -> bool` is the eval-time predicate.

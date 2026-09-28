@@ -19,10 +19,15 @@
 # needs. gen-bind's signature is a lightweight analog: `bound` = exports
 # (what gen-bind provided), `requires` = imports (what evalModules must fill).
 { prelude }:
-{
-  # Door check (den-hoag-7gp66, P1 unit 7): `module`/`bindings`/`defaultMergeStrategy`/
-  # `mergeStrategies` required, `provenance`/`vocabulary` optional — a mixed door, closed
-  # overall (§v1.2).
+let
+  # `buildSignature { provenance ? { }; vocabulary ? null; } { module; bindings; defaultMergeStrategy;
+  # mergeStrategies; }` (den-hoag-7gp66 P2, R7). The options are one closed set, first. The four
+  # operands stay ONE required-argument record (R7 (a)): the module is the subject, and the three
+  # beside it — the bound values, the default strategy and the per-name strategies — have no order
+  # among them, so a positional order would be an arbitrary one to remember. The record is a
+  # `prelude.door` too (open, R5), guarded against the options step (`optionsStep`), so an option
+  # given on the record is refused by name rather than silently dropped. `cores.buildSignature` is
+  # the unchecked core `wrap.nix` calls.
   #
   # `vocabulary`: the vocabulary a CALLER declares it may supply, which can be broader
   # than the bindings actually provided at this specific wrap site (e.g. a layered
@@ -30,41 +35,23 @@
   # separate vocabulary, so it collapses to `bindings`' own keys and inVocabulary ==
   # isBound for every key — unsatisfied is honestly [] because nothing outside bindings
   # was ever declared as forthcoming.
-  buildSignature =
-    argsRaw:
+  buildSignatureCore =
+    o: args:
     let
-      checked =
-        prelude.checkOptions "gen-bind.buildSignature"
-          [
-            "module"
-            "bindings"
-            "defaultMergeStrategy"
-            "mergeStrategies"
-            "provenance"
-            "vocabulary"
-          ]
-          (
-            prelude.checkRequired "gen-bind.buildSignature" [
-              "module"
-              "bindings"
-              "defaultMergeStrategy"
-              "mergeStrategies"
-            ] argsRaw
-          );
-      inherit (checked)
+      inherit (args)
         module
         bindings
         defaultMergeStrategy
         mergeStrategies
         ;
-      provenance = checked.provenance or { };
-      vocabulary = checked.vocabulary or null;
+      provenance = o.provenance or { };
+      vocabulary = o.vocabulary or null;
       allArgs = if builtins.isFunction module then builtins.functionArgs module else { };
       argNames = builtins.attrNames allArgs;
       boundArgNames = builtins.filter (k: bindings ? ${k}) argNames;
       fullVocabulary = if vocabulary == null then builtins.attrNames bindings else vocabulary;
     in
-    builtins.seq checked {
+    {
       requires = builtins.removeAttrs allArgs boundArgNames;
 
       bound = prelude.genAttrs boundArgNames (k: {
@@ -92,4 +79,28 @@
         k: mergeStrategies.${k} or defaultMergeStrategy
       );
     };
+
+  buildSignatureOptions = prelude.door {
+    name = "gen-bind.buildSignature";
+    optional = [
+      "provenance"
+      "vocabulary"
+    ];
+  };
+  buildSignatureRecord = prelude.door {
+    name = "gen-bind.buildSignature";
+    required = [
+      "module"
+      "bindings"
+      "defaultMergeStrategy"
+      "mergeStrategies"
+    ];
+    open = true;
+    optionsStep = buildSignature;
+  };
+  buildSignature = buildSignatureOptions (o: buildSignatureRecord (buildSignatureCore o));
+in
+{
+  inherit buildSignature;
+  cores.buildSignature = buildSignatureCore;
 }

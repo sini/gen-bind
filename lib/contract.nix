@@ -16,24 +16,26 @@ let
   provenanceLib = import ./provenance.nix { inherit prelude; };
 in
 {
-  # Door check (den-hoag-7gp66, P1 unit 7): `check` required, `message`/`blame` optional —
-  # a mixed door, closed overall (§v1.2).
+  # `mk { message ? "contract violation"; blame ? null; } check` (den-hoag-7gp66 P2, R7): the
+  # options are one closed set, first, checked when `mk opts` is formed (a `prelude.door`); the
+  # predicate is the one operand.
   mk =
-    argsRaw:
-    let
-      checked = prelude.checkOptions "gen-bind.contract.mk" [
-        "check"
-        "message"
-        "blame"
-      ] (prelude.checkRequired "gen-bind.contract.mk" [ "check" ] argsRaw);
-      inherit (checked) check;
-      message = checked.message or "contract violation";
-      blame = checked.blame or null;
-    in
-    builtins.seq checked {
-      __contract = true;
-      inherit check message blame;
-    };
+    prelude.door
+      {
+        name = "gen-bind.contract.mk";
+        optional = [
+          "message"
+          "blame"
+        ];
+      }
+      (
+        o: check: {
+          __contract = true;
+          inherit check;
+          message = o.message or "contract violation";
+          blame = o.blame or null;
+        }
+      );
 
   hasFields = fields: {
     __contract = true;

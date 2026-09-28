@@ -48,20 +48,17 @@ let
   #
   # Laziness: `evalModules` builds config lazily; the RESULT is a WHNF attrset and no slice
   # config value is forced until `.config.<key>` is demanded.
-  crossEval =
-    argsRaw:
+  #
+  # `crossEval { specialArgs ? { }; moduleArgs ? null; absorb ? true; } lib module` (den-hoag-7gp66
+  # P2, R7): the options are one closed set, first, checked when `crossEval opts` is formed (a
+  # `prelude.door`); the terminal `lib` is configuration and the `module` is the subject, last.
+  # `crossEvalCore` is the unchecked core `configGate` calls.
+  crossEvalCore =
+    o: lib: module:
     let
-      checked = prelude.checkOptions "gen-bind.crossEval" [
-        "lib"
-        "module"
-        "specialArgs"
-        "moduleArgs"
-        "absorb"
-      ] (prelude.checkRequired "gen-bind.crossEval" [ "lib" "module" ] argsRaw);
-      inherit (checked) lib module;
-      specialArgs = checked.specialArgs or { };
-      moduleArgs = checked.moduleArgs or null;
-      absorb = checked.absorb or true;
+      specialArgs = o.specialArgs or { };
+      moduleArgs = o.moduleArgs or null;
+      absorb = o.absorb or true;
     in
     lib.evalModules {
       inherit specialArgs;
@@ -70,6 +67,14 @@ let
         ++ [ module ]
         ++ (if moduleArgs == null then [ ] else [ { config._module.args = moduleArgs; } ]);
     };
+  crossEval = prelude.door {
+    name = "gen-bind.crossEval";
+    optional = [
+      "specialArgs"
+      "moduleArgs"
+      "absorb"
+    ];
+  } crossEvalCore;
 in
 {
   inherit crossEval;
@@ -84,16 +89,13 @@ in
   # `_module.args` is the ONLY arg-env channel a module can write from INSIDE the eval;
   # `specialArgs` is caller-only (see crossEval). Laziness: `adapt` and `module` are forced
   # only when the returned function is applied by `evalModules`, never at construction.
-  adaptArgs =
-    argsRaw:
-    let
-      checked = prelude.checkRequired "gen-bind.adaptArgs" [ "adapt" "module" ] argsRaw;
-      inherit (checked) adapt module;
-    in
-    builtins.seq checked (args: {
-      imports = [ module ];
-      _module.args = adapt args;
-    });
+  #
+  # `adaptArgs adapt module` (den-hoag-7gp66 P2, R7): positional, the derivation of the arg
+  # environment as configuration and the placed module as the subject, last.
+  adaptArgs = adapt: module: args: {
+    imports = [ module ];
+    _module.args = adapt args;
+  };
 
   # configGate — an eval-time `mkIf` gate over a slice's nested-eval'd CONFIG.
   #
@@ -141,26 +143,32 @@ in
   # this unit — there is nothing here for `den-hoag-i546n` to fix. Wiring
   # `bindArgEnv` to this function on some future Adapter is a reach widening,
   # out of scope for a record that only prices what already exists.
+  #
+  # `configGate { adapt ? (_: { }); absorb ? true; } gate module` (den-hoag-7gp66 P2, R7): the
+  # options are one closed set, first (a `prelude.door`); the gate is configuration and the module
+  # the subject, last.
   configGate =
-    argsRaw:
-    let
-      checked = prelude.checkOptions "gen-bind.configGate" [
-        "gate"
-        "module"
-        "adapt"
-        "absorb"
-      ] (prelude.checkRequired "gen-bind.configGate" [ "gate" "module" ] argsRaw);
-      inherit (checked) gate module;
-      adapt = checked.adapt or (_: { });
-      absorb = checked.absorb or true;
-    in
-    builtins.seq checked (args: {
-      config =
-        args.lib.mkIf (gate args)
-          (crossEval {
-            inherit (args) lib;
-            inherit module absorb;
-            moduleArgs = adapt args;
-          }).config;
-    });
+    prelude.door
+      {
+        name = "gen-bind.configGate";
+        optional = [
+          "adapt"
+          "absorb"
+        ];
+      }
+      (
+        o: gate: module:
+        let
+          adapt = o.adapt or (_: { });
+          absorb = o.absorb or true;
+        in
+        args: {
+          config =
+            args.lib.mkIf (gate args)
+              (crossEvalCore {
+                inherit absorb;
+                moduleArgs = adapt args;
+              } args.lib module).config;
+        }
+      );
 }

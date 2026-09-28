@@ -181,18 +181,16 @@ let
   #
   # ★ This is a per-binding CLASSIFICATION READ of one recorded attribute. There
   # is no traversal here and it must not become cycle detection.
-  # Door check (den-hoag-7gp66, P1 unit 7): `staticityAdmissible`/`deltaExact`/`adapter`/
-  # `name` all required — a record door (§v1.2), open (R5).
-  placement =
-    argsRaw:
+  # THE RECORD (den-hoag-7gp66 P2, R7 (a)): the binding named by `name` is the subject, and the three
+  # facts read about it — its staticity verdict, its demand-set exactness and the Adapter offering
+  # the positions — have no order among them, so the four stay ONE required-argument record rather
+  # than an arbitrary positional order. `placement` is a `prelude.door` over it (open, R5): a missing
+  # field is refused by name, catchably, when the record is applied. `placementCore` is the unchecked
+  # core the crossing pipeline calls once per node.
+  placementCore =
+    args:
     let
-      inherit
-        (prelude.checkRequired "gen-bind.crossing.placement" [
-          "staticityAdmissible"
-          "deltaExact"
-          "adapter"
-          "name"
-        ] argsRaw)
+      inherit (args)
         staticityAdmissible
         deltaExact
         adapter
@@ -242,8 +240,19 @@ let
           offered = builtins.filter (offers adapter) fields;
         };
       };
+  placement = prelude.door {
+    name = "gen-bind.crossing.placement";
+    required = [
+      "staticityAdmissible"
+      "deltaExact"
+      "adapter"
+      "name"
+    ];
+    open = true;
+  } placementCore;
 in
 {
+  cores.placement = placementCore;
   inherit
     channel
     time

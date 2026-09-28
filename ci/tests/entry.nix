@@ -212,7 +212,7 @@ in
   flake.tests.entry.test-standalone-entry-constructs-its-siblings = {
     expr = {
       prelude =
-        (entry.buildSignature {
+        (entry.buildSignature { } {
           module =
             {
               a ? null,

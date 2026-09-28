@@ -15,10 +15,7 @@ in
           };
           __functor = _: _: { };
         };
-        stripped = stripBindingArgs {
-          module = mod;
-          bindingNames = [ "host" ];
-        };
+        stripped = stripBindingArgs [ "host" ] mod;
       in
       stripped.__functionArgs;
     expected = {
@@ -39,10 +36,7 @@ in
             ...
           }:
           { };
-        stripped = stripBindingArgs {
-          module = mod;
-          bindingNames = [ "host" ];
-        };
+        stripped = stripBindingArgs [ "host" ] mod;
       in
       stripped.__functionArgs;
     expected = {
@@ -56,10 +50,7 @@ in
     expr =
       let
         mod = { config, lib, ... }: { };
-        stripped = stripBindingArgs {
-          module = mod;
-          bindingNames = [ "host" ];
-        };
+        stripped = stripBindingArgs [ "host" ] mod;
       in
       builtins.functionArgs stripped;
     expected = {
@@ -74,10 +65,7 @@ in
         mod = {
           services.nginx.enable = true;
         };
-        stripped = stripBindingArgs {
-          module = mod;
-          bindingNames = [ "host" ];
-        };
+        stripped = stripBindingArgs [ "host" ] mod;
       in
       mod == stripped;
     expected = true;
