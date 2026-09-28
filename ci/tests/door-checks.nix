@@ -14,6 +14,8 @@
 #   - a record behind an options step refuses each of that step's own names (`optionsStep`, G10)
 #   - every step publishes its row as its contract, as data and through the functor-aware reader (D3)
 #   - a non-default option reaches the partially applied door and moves the answer (G3)
+#   - a CLOSED record step (den-hoag-ekum1) admits its good record, and refuses a misspelt field, a
+#     missing one and a non-attrset — each of which its native closed formal aborted on uncatchably
 #
 # `tests` pins what each step ADMITS/REFUSES and that every refusal is catchable; `testsError` pins
 # WHICH refusal fired and that it names the door first (R6).
@@ -33,6 +35,8 @@ let
   each = f: builtins.mapAttrs (_: f);
   flag = v: names: lib.genAttrs names (_: v);
   guarded = lib.filterAttrs (_: r: r ? guardedBy) F.records;
+  published = lib.filterAttrs (_: r: r.published) F.closed;
+  dropping = lib.filterAttrs (_: r: r.drop != null) F.closed;
 
   # Every options door on the published surface (depth <= 2), read off its `__contract` rather than
   # a hand list, so a new one is seen whether or not a row was written for it.
@@ -92,6 +96,22 @@ let
         };
       }
     );
+  closedGoldens =
+    key: row:
+    {
+      "test-${key}-misspelt-field-message" = {
+        expr = row.step (row.good // { ${row.typo} = 1; });
+        expectedError = pin key "'${row.typo}' is not an option of this door; the options are closed [(]accepted: ${
+          quoted (row.accepted or row.required)
+        }[)] [(]in prelude[.]checkOptions[)]";
+      };
+    }
+    // lib.optionalAttrs (row.drop != null) {
+      "test-${key}-missing-required-field-message" = {
+        expr = row.step (builtins.removeAttrs row.good [ row.drop ]);
+        expectedError = pin key "required field '${row.drop}' is missing [(]required: ${quoted row.required}[)] [(]in prelude[.]checkRequired[)]";
+      };
+    };
 in
 {
   flake.tests.door-checks = {
@@ -121,6 +141,7 @@ in
     # The table is the subject; a row dropped from it would drop its cells silently.
     test-door-table-rows = {
       expr = {
+        closed = builtins.attrNames F.closed;
         options = builtins.attrNames F.options;
         records = builtins.attrNames F.records;
       };
@@ -135,6 +156,13 @@ in
           "wrap"
           "wrapAll"
           "wrapIdentity"
+        ];
+        closed = [
+          "composeWith"
+          "crossing.binding.plain"
+          "crossing.binding.scoped"
+          "crossing.binding.termed"
+          "crossing.binding.wrapped"
         ];
         records = [
           "buildSignature"
@@ -264,8 +292,46 @@ in
         functionArgs = flag false d.required;
       }) F.records;
     };
+    # den-hoag-ekum1: the closed record steps. Each refusal below was an UNCATCHABLE abort under the
+    # native closed formal (`called with unexpected argument` / `called without required argument`).
+    test-the-good-record-is-admitted-at-every-closed-step = {
+      expr = each (d: applied d.step d.good) F.closed;
+      expected = each (_: true) F.closed;
+    };
+    test-a-misspelt-field-is-refused-catchably-at-every-closed-step = {
+      expr = each (d: applied d.step (d.good // { ${d.typo} = 1; })) F.closed;
+      expected = each (_: false) F.closed;
+    };
+    test-a-misspelling-in-place-of-a-field-is-refused-catchably = {
+      expr = each (
+        d: applied d.step (builtins.removeAttrs d.good [ d.drop ] // { ${d.typo} = 1; })
+      ) dropping;
+      expected = each (_: false) dropping;
+    };
+    test-a-missing-field-is-refused-catchably-at-every-closed-step = {
+      expr = each (d: applied d.step (builtins.removeAttrs d.good [ d.drop ])) dropping;
+      expected = each (_: false) dropping;
+    };
+    test-a-non-attrset-record-is-refused-catchably-at-every-closed-step = {
+      expr = each (d: applied d.step 1) F.closed;
+      expected = each (_: false) F.closed;
+    };
+    test-every-published-closed-step-publishes-the-row-as-its-contract = {
+      expr = each (d: {
+        inherit (d.step.__contract) required optional open;
+        functionArgs = prelude.functionArgs d.step;
+      }) published;
+      expected = each (d: {
+        inherit (d) required;
+        optional = [ ];
+        open = false;
+        functionArgs = flag false d.required;
+      }) published;
+    };
   };
 
   flake.testsError.door-checks =
-    lib.concatMapAttrs optionGoldens F.options // lib.concatMapAttrs recordGoldens F.records;
+    lib.concatMapAttrs optionGoldens F.options
+    // lib.concatMapAttrs recordGoldens F.records
+    // lib.concatMapAttrs closedGoldens F.closed;
 }

@@ -255,10 +255,11 @@ in
     expr = liveReads;
     # den-hoag-7gp66 P1 unit 7: `arg-env.nix`/`identity.nix`/`strip.nix` now take `prelude`
     # (door checks via `prelude.checkOptions`/`checkRequired`), joining the live set; only
-    # `compose.nix` and `module-convention.nix` keep the `{ ... }:` signature that excludes
-    # them.
+    # `module-convention.nix` keeps the `{ ... }:` signature that excludes it (`compose.nix` joined
+    # at den-hoag-ekum1, when its layer record became a `prelude.door`).
     expected = [
       "lib/arg-env.nix"
+      "lib/compose.nix"
       "lib/contract.nix"
       "lib/crossing-adapter-set.nix"
       "lib/crossing-adapter.nix"

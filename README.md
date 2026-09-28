@@ -437,6 +437,8 @@ reg.value.projection.opaque      # { targets = [ "iceberg" ]; exact = "APPROX"; 
 | `scoped { file; scope; producer; mark; }` | P-B, the file-loaded body         | `{producer}`, complete on the caller-lexical channel only — the `import` channel is measured open     |
 | `wrapped { producer; body; mark; }`       | P-C, the foreign lambda           | `{producer}`, an **under-approximation**: application bounds the argument channel and nothing lexical |
 
+Each constructor's record is closed and every field is required. A misspelt or missing field is refused by name and catchably, naming the constructor (`gen-bind.crossing.binding.plain: required field 'mark' is missing …`).
+
 `Termed` is **not** a restriction on the authoring language. An author builds the term with ordinary Nix — `map`, `listToAttrs`, computed attribute names — and all of that runs at term-construction time, leaving a term whose keys and read paths are literal by the time the analysis runs.
 
 **The stratification is derived too.** A binding's height in the sibling-reference graph is read off the `ReadCtx` head names in the terms — a canonical *height function*, not a choice of topological order, so it is unique and invariant under the presentation order of the bindings. A `ReadCtx` resolves only against a **strictly lower** stratum, so a same-pass sibling reference cannot be named and a cycle in that channel is refused at registration and inexpressible thereafter. A **cycle across eval boundaries is a different object** and stays expressible and unattributed: the foreign evaluator's `infinite recursion`, uncatchable and carrying no name of ours.
@@ -648,7 +650,7 @@ composeWith layers
 # layers: [ { bindings?; provenance?; contracts?; mergeStrategies?; } ... ]
 ```
 
-Structured composition across all four binding fields. Returns `{ bindings; provenance; contracts; mergeStrategies }`.
+Structured composition across all four binding fields. Returns `{ bindings; provenance; contracts; mergeStrategies }`. A layer is a closed record: a field outside the four is refused by name, catchably, when the fold reaches that layer (`gen-bind.composeWith: 'bindngs' is not an option of this door …`).
 
 ### `wrapIdentity`
 

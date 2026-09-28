@@ -65,21 +65,28 @@ let
     tag: m: build:
     if !(builtins.isString m) || !(prelude.elem m marks) then markRefusal tag m else build;
 
-  plain =
-    {
-      value,
-      mark,
-    }:
+  # The four constructors are `prelude.door`s over a CLOSED record whose fields are all required
+  # (den-hoag-ekum1): a missing or misspelt field is refused by name and catchably, where the native
+  # closed formal each replaces aborted uncatchably (ADR-0025 item 1). Closed, not R5's open record:
+  # a constructor's field set is its declaration, and an unknown field is a mistake, not extension
+  # data — the posture of `prelude.resolve`'s registry step.
+  constructor =
+    tag: required:
+    prelude.door {
+      name = "gen-bind.crossing.binding.${tag}";
+      inherit required;
+    };
+
+  plain = constructor "plain" [ "value" "mark" ] (
+    { value, mark }:
     guardMark "Plain" mark {
       __binding = "Plain";
       inherit value mark;
-    };
+    }
+  );
 
-  termed =
-    {
-      term,
-      mark,
-    }:
+  termed = constructor "termed" [ "term" "mark" ] (
+    { term, mark }:
     guardMark "Termed" mark (
       if isRefusal term then
         term
@@ -88,9 +95,10 @@ let
           __binding = "Termed";
           inherit term mark;
         }
-    );
+    )
+  );
 
-  scoped =
+  scoped = constructor "scoped" [ "file" "scope" "producer" "mark" ] (
     {
       file,
       scope,
@@ -105,12 +113,13 @@ let
         producer
         mark
         ;
-    };
+    }
+  );
 
   # §2.11 row 1: a `Wrapped` binding whose body the substrate does not itself
   # apply is refused at registration. The substrate applies the body to a
   # ProducerScope, so a body it cannot apply is one that is not a function.
-  wrapped =
+  wrapped = constructor "wrapped" [ "producer" "body" "mark" ] (
     {
       producer,
       body,
@@ -131,7 +140,8 @@ let
           __binding = "Wrapped";
           inherit producer body mark;
         }
-    );
+    )
+  );
 
   isBinding = v: builtins.isAttrs v && v ? __binding;
 
