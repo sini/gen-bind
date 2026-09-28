@@ -303,7 +303,7 @@ let
           # bound is the admitted-key restriction of `extent`, built from
           # `forgetLabels bounded .edges readerId`, gen-graph's own dedup
           # projection reused rather than re-`unique`d here.
-          bounded = graph.boundedBy peerGraph marksOf;
+          bounded = graph.boundedBy marksOf peerGraph;
           admitted = (graph.forgetLabels bounded).edges readerId;
           admittedExtent = builtins.listToAttrs (
             map (k: {

@@ -39,9 +39,8 @@ let
   ];
 
   peerGraph = graph.labeledFrom {
-    nodes = fixtureNodes;
-    perLabel.peer = _id: fixtureNodes;
-  };
+    peer = _id: fixtureNodes;
+  } fixtureNodes;
 
   isolatingMarksOf =
     id:
@@ -185,7 +184,7 @@ let
     inherit projected;
     terminals.host = preFixRawTerminal;
   };
-  o3BoundedDirect = graph.boundedBy peerGraph isolatingMarksOf;
+  o3BoundedDirect = graph.boundedBy isolatingMarksOf peerGraph;
 
   # ════════════════════════════════════════════════════════════════════════
   # O-4 — the O-1 oracle's own instrument: the spine is readable without
@@ -198,9 +197,8 @@ let
     "bravo"
   ];
   o4PeerGraph = graph.labeledFrom {
-    nodes = o4Nodes;
-    perLabel.peer = _id: o4Nodes;
-  };
+    peer = _id: o4Nodes;
+  } o4Nodes;
   o4Projected.nodes = builtins.listToAttrs (
     map (n: {
       name = n;

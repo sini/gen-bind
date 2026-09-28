@@ -97,9 +97,8 @@ let
     carriage
     // {
       peerGraph = graph.labeledFrom {
-        nodes = keys;
-        perLabel.peer = _id: keys;
-      };
+        peer = _id: keys;
+      } keys;
       marksOf = _id: [ ];
       readerId = "fixture";
     };
