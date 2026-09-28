@@ -9,10 +9,11 @@
 #
 # gen-bind is module-system-*aware*, not module-system-*dependent*: it speaks this
 # convention to emit modules a real `evalModules` consumes, but owns the ~6 LOC rather
-# than importing `nixpkgs.lib`. Kept gen-bind-local (not in gen-prelude) — they are
-# gen-bind-only and module-convention-specific; a general util lib should not know about
-# `__functionArgs`/`_file`. Production-safety is gated by the evalModules equivalence
-# suite (ci/tests/evalmodules-equivalence.nix).
+# than importing `nixpkgs.lib`. Kept gen-bind-local: gen-prelude READS the convention
+# (its `functionArgs` / `isFunction` are nixpkgs' functor-aware readers, and its `door`
+# publishes `__functionArgs` from a field contract, den-hoag-7gp66 P2), but these two WRITERS
+# are the module convention's, and `_file` is the module system's alone. Production-safety is
+# gated by the evalModules equivalence suite (ci/tests/evalmodules-equivalence.nix).
 #
 # Provenance: copied verbatim from nixpkgs `lib/trivial.nix` (setFunctionArgs) and
 # `lib/modules.nix` (setDefaultModuleLocation). Do not reimplement from memory — the
