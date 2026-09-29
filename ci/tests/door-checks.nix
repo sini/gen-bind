@@ -147,7 +147,6 @@ in
           "configGate"
           "contract.mk"
           "crossEval"
-          "crossing.mkFlakeTerminal"
           "resolveThunks"
           "wrap"
           "wrapAll"
@@ -163,7 +162,6 @@ in
           "crossing.coherence"
           "crossing.environment"
           "crossing.linked"
-          "crossing.mkFlakeTerminal"
           "crossing.mkHostedTerminal"
           "crossing.placement"
           "mkMergeValidator"
@@ -271,7 +269,6 @@ in
           "wrapAll"
           "wrapIdentity"
           "contract.mk"
-          "crossing.mkFlakeTerminal"
         ];
       };
     };

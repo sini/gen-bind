@@ -1097,7 +1097,7 @@ in
   inherit (adapterSetLib)
     injectAdapter
     mkHostedTerminal
-    mkFlakeTerminal
+    mkOutputsTerminal
     ;
   inherit (linksetLib)
     mkLinkset

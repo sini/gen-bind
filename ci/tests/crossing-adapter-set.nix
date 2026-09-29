@@ -74,7 +74,7 @@ let
 
   c = x.contractTerm;
 
-  inherit (genBind.crossing) injectAdapter mkHostedTerminal mkFlakeTerminal;
+  inherit (genBind.crossing) injectAdapter mkHostedTerminal mkOutputsTerminal;
 
   # ── the identity peer carriage (extent peer-read shape, Q5 Arm A) ────────────
   # `mkHostedTerminal(...).adapter{...}` now requires `peerGraph`/`marksOf`/
@@ -392,29 +392,22 @@ let
     modules = [ optionsModule ] ++ (hostedTerminal.locateConfig systemClosed.value).built;
   };
 
-  # ── the flake terminal ───────────────────────────────────────────────────────
+  # ── the outputs terminal ─────────────────────────────────────────────────────
 
-  # The flake-module evaluator, INJECTED exactly as the system evaluator is. A
-  # stub is the right instrument: the adapter's whole contract at this position
-  # is that it hands the Body and the systems to the evaluator it was given.
-  flakeTerminal =
-    mkFlakeTerminal
-      {
-        systems = [ "x86_64-linux" ];
-      }
-      {
-        evalFlakeModule = argsIn: mod: {
-          config.flake = {
-            modulesSeen = mod.imports;
-            inherit (mod) systems;
-            inputsSeen = builtins.attrNames argsIn.inputs;
-          };
-        };
-        inputs = {
-          upstream = "an-input";
-        };
-        self = "the-self";
-      };
+  # The outputs evaluator, INJECTED exactly as the system evaluator is. A stub is
+  # the right instrument: the adapter's whole contract at this position is that it
+  # hands the Body to the `evaluate` it was given.
+  flakeTerminal = mkOutputsTerminal (body: {
+    modulesSeen = body;
+  });
+
+  # B1's stub: an `evaluate` whose answer is not the Body, so `wrapUnit` returning
+  # the Body itself (or anything but `evaluate body`) reads as a mismatch.
+  outputsStubEvaluate = body: {
+    modulesSeen = body;
+    n = builtins.length body;
+  };
+  outputsStubTerminal = mkOutputsTerminal outputsStubEvaluate;
 
   flakeModuleBody = [ { config.packages = { }; } ];
 
@@ -1215,18 +1208,11 @@ in
   flake.tests.crossing-adapter-set.test-control-o-trm-2-a-flake-fleet-with-no-crossings-still-builds = {
     expr = {
       ok = x.isOk flakeNoCrossings;
-      modulesSeen = flakeNoCrossings.value.modulesSeen;
-      systems = flakeNoCrossings.value.systems;
-      inputsSeen = flakeNoCrossings.value.inputsSeen;
+      inherit (flakeNoCrossings) value;
     };
     expected = {
       ok = true;
-      modulesSeen = flakeModuleBody;
-      systems = [ "x86_64-linux" ];
-      inputsSeen = [
-        "self"
-        "upstream"
-      ];
+      value.modulesSeen = flakeModuleBody;
     };
   };
 
@@ -1368,12 +1354,67 @@ in
     };
   };
 
-  # A flake terminal produces outputs, not an evaluated config, and it says so
+  # An outputs terminal produces outputs, not an evaluated config, and it says so
   # VISIBLY — the same discipline the Adapter's `Maybe` fields use for a position
   # that is not offered.
   flake.tests.crossing-adapter-set.test-o-trm-4-a-terminal-with-no-evaluated-config-says-so-visibly = {
     expr = flakeTerminal.locateConfig;
     expected = null;
+  };
+
+  # ══ B1 — THE OUTPUTS TERMINAL IS VERBATIM AND NULL-POSITION (den-hoag-52hn7) ══
+  #
+  # `wrapUnit` IS `evaluate` applied to the Body, and nothing else: no position is
+  # offered, no config is located, and the record is a well-formed Adapter. A
+  # functor `evaluate` is admitted beside the lambda.
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: `verbatim` false — the terminal hands back
+  # something other than the caller's evaluation (the Body itself, say), which
+  # every downstream reader would take as the outputs.
+  flake.tests.crossing-adapter-set.test-b1-the-outputs-terminal-is-verbatim-and-null-position = {
+    expr = {
+      verbatim =
+        outputsStubTerminal.adapter.wrapUnit flakeModuleBody [ ] == outputsStubEvaluate flakeModuleBody;
+      inherit (outputsStubTerminal) locateConfig;
+      positions = [
+        outputsStubTerminal.adapter.bindFormals
+        outputsStubTerminal.adapter.bindArgEnv
+        outputsStubTerminal.adapter.wrapFn
+      ];
+      accepted = x.isOk (genBind.crossing.mkAdapter outputsStubTerminal.adapter);
+      functorAdmitted =
+        (builtins.tryEval (
+          (mkOutputsTerminal {
+            __functor = _: outputsStubEvaluate;
+          }).adapter.wrapUnit
+            flakeModuleBody
+            [ ] == outputsStubEvaluate flakeModuleBody
+        )).value;
+    };
+    expected = {
+      verbatim = true;
+      locateConfig = null;
+      positions = [
+        null
+        null
+        null
+      ];
+      accepted = true;
+      functorAdmitted = true;
+    };
+  };
+
+  # ══ B2 — A NON-FUNCTION `evaluate` IS REFUSED BY NAME, CATCHABLY ══════════════
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the record forms, and the first use aborts
+  # UNCATCHABLY with Nix's own `attempt to call something which is not a
+  # function`, naming neither the construct nor the operand.
+  flake.testsError.crossing-adapter-set.test-b2-a-non-function-evaluate-is-refused-by-name = {
+    expr = (mkOutputsTerminal 1).adapter;
+    expectedError = {
+      type = "ThrownError";
+      msg = "^gen-bind[.]crossing[.]mkOutputsTerminal: `evaluate` must be a function from the Body to the outputs, not a int$";
+    };
   };
 
   # ══ ADR-0023 (b) write-list entry 8 — O-1, O-2, O-3's permanent cells ═══════

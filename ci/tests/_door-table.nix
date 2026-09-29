@@ -22,13 +22,8 @@
 # they have no field check.
 { genBind, lib }:
 let
-  inherit (genBind.crossing) mkFlakeTerminal binding term;
+  inherit (genBind.crossing) binding term;
 
-  flakeRecord = {
-    evalFlakeModule = _inputs: m: { config.flake = { inherit (m) systems; }; };
-    inputs = { };
-    self = "s";
-  };
   # A module reading one arg, defaulted, so the `{ }` call answers too.
   reads =
     {
@@ -141,12 +136,6 @@ in
       on.message = "m";
       run = f: (f (_: true)).message;
     };
-    "crossing.mkFlakeTerminal" = {
-      door = mkFlakeTerminal;
-      optional = [ "systems" ];
-      on.systems = [ "x" ];
-      run = f: (f flakeRecord).adapter.wrapUnit [ ] [ ];
-    };
   };
 
   # The options doors whose next step is not a record.
@@ -183,17 +172,6 @@ in
       good = thunkRecord;
       drop = "bindings";
       guardedBy = "resolveThunks";
-    };
-    "crossing.mkFlakeTerminal" = {
-      step = mkFlakeTerminal { };
-      required = [
-        "evalFlakeModule"
-        "inputs"
-        "self"
-      ];
-      good = flakeRecord;
-      drop = "self";
-      guardedBy = "crossing.mkFlakeTerminal";
     };
     mkMergeValidator = {
       step = genBind.mkMergeValidator;

@@ -10,12 +10,14 @@
 #
 # `crossing-adapter.nix` defines the Adapter TYPE and resolves PLACEMENT. This
 # file defines the INSTANCES: what an Adapter actually is for a module-system
-# target, for a system evaluator, and for a flake-parts output crossing.
+# target, for a system evaluator, and for an outputs crossing over a
+# caller-supplied evaluate.
 #
 # ★ A `Body` IS WHATEVER ITS ADAPTER SAYS IT IS. The design of record enumerates
 # `Body` among the four opaque target-owned types and the substrate never reads
 # one, so each adapter below DEFINES its own — a module for `injectAdapter`, a
-# module LIST for `mkHostedTerminal`, a flake-module list for `mkFlakeTerminal`.
+# module LIST for `mkHostedTerminal`, and a Body for `mkOutputsTerminal` is
+# whatever its `evaluate` takes.
 # The substrate carries them and nothing more.
 #
 # ★★ WHY EACH CONSTRUCTOR RETURNS A `Terminal` RECORD `{ adapter, locateConfig }`
@@ -472,13 +474,13 @@ let
         }
       );
 
-  # ── the flake terminal ───────────────────────────────────────────────────────
-  # The successor to gen-flake's `mkFlakeTerminal`, and it is a NULL-POSITION
-  # ADAPTER: every placement position is `null`.
+  # ── the outputs terminal ─────────────────────────────────────────────────────
+  # A terminal over a caller-supplied `evaluate : Body -> outputs`, and it is a
+  # NULL-POSITION ADAPTER: every placement position is `null`.
   #
   # ★★★ NORMATIVE (§2.3.3(a)) — THIS ADAPTER MUST NOT GROW `bindFormals`,
-  # `bindArgEnv`, `wrapFn`, `extent` OR `bindings`. The corpus census's zero for a
-  # flake fleet receiving a cross-unit deferred is a zero BY CONSTRUCTION at this
+  # `bindArgEnv`, `wrapFn`, `extent` OR `bindings`. The corpus census's zero for an
+  # outputs fleet receiving a cross-unit deferred is a zero BY CONSTRUCTION at this
   # contract: the source signature had nowhere to put one. Growing an offered
   # position converts that into an as-authored zero, AND NOTHING DOWNSTREAM WOULD
   # NOTICE — every fixture would stay green and the count would stay zero. Any
@@ -486,10 +488,9 @@ let
   # never an implementation detail. O-TRM-2's seeded defect is exactly this
   # mutation, and it must turn the refusal cells red.
   #
-  # ★ THE MIGRATION STRICTLY CHANGES A SILENCE INTO A WITNESS. Today a flake
-  # fleet cannot receive a crossing because the function signature has nowhere to
-  # put one. Here it cannot receive one because the adapter DECLARES it offers no
-  # position: a `Substrate`-admissible name meets `adapterMissingBindFormals`
+  # ★ THE MIGRATION STRICTLY CHANGES A SILENCE INTO A WITNESS. An outputs fleet
+  # cannot receive a crossing because the adapter DECLARES it offers no position:
+  # a `Substrate`-admissible name meets `adapterMissingBindFormals`
   # (`crossing-adapter.nix:174-181`, and again at `crossing.nix:851-858` before
   # any body is built — two independent sites, so the safety does not depend on
   # `placement` being consulted first), a `TargetInvoked` name meets
@@ -501,44 +502,26 @@ let
   # fragment carrying more than one (`close-body-count`). Building a Body per
   # module meets a landed refusal, not a silent narrowing.
   #
-  # `evalFlakeModule` is INJECTED, exactly as `evaluator` is for the system
-  # terminal: the host that evaluates flake modules is the consumer's, and naming
-  # it here would put a host boundary inside the substrate.
+  # `evaluate` is INJECTED, exactly as `evaluator` is for the hosted terminal:
+  # which module system evaluates the Body is the caller's (ADR-0027, re-affirmed
+  # 2026-09-28), and naming one here would put that system inside the substrate.
   #
-  # `locateConfig = null` — a flake terminal produces outputs, not an evaluated
+  # `locateConfig = null` — an outputs terminal produces outputs, not an evaluated
   # config, and saying so visibly is what §2.3.3(b) requires of the field.
-  # `mkFlakeTerminal { systems ? [ ]; } { evalFlakeModule; inputs; self; }` (den-hoag-7gp66 P2, R7).
-  # The option is one closed set, first. The three operands stay ONE required-argument record
-  # (R7 (a)): the injected flake-module evaluator, the inputs and the flake itself are three
-  # configuration operands of a constructor with no subject and no order among them. Both steps are
-  # `prelude.door`s, so each publishes its contract as data (`__functionArgs`, which the hub's
-  # ADR-0035 vocabulary walk reads through its functor clause) — what the native-ellipsis pattern of
-  # owner-ruled arm (C) (2026-09-27) kept readable, with the door's catchable refusal where that
-  # pattern aborted uncatchably on a missing field (C′, den-hoag-49yxv). The record is guarded
-  # against the options step (`optionsStep`), so `systems` given on the record is refused by name
-  # rather than silently dropped.
-  mkFlakeTerminalOptions = prelude.door {
-    name = "gen-bind.crossing.mkFlakeTerminal";
-    optional = [ "systems" ];
-  };
-  mkFlakeTerminalRecord = prelude.door {
-    name = "gen-bind.crossing.mkFlakeTerminal";
-    required = [
-      "evalFlakeModule"
-      "inputs"
-      "self"
-    ];
-    open = true;
-    optionsStep = mkFlakeTerminal;
-  };
-  mkFlakeTerminal = mkFlakeTerminalOptions (
-    o:
-    mkFlakeTerminalRecord (
-      args:
-      let
-        inherit (args) evalFlakeModule inputs self;
-        systems = o.systems or [ ];
-      in
+  #
+  # `mkOutputsTerminal evaluate` is POSITIONAL, with no door (R7 i′; den-hoag-7gp66
+  # P2 rule 4): `evaluate` is its sole operand, and a positional step is a plain
+  # lambda that publishes no field contract.
+  #
+  # Totality of `evaluate`: a non-function is refused by name, catchably, at the
+  # record's WHNF; a functor is admitted. Its return is opaque (`locateConfig =
+  # null`, so nothing reads it), and its arity against the Body is the caller's,
+  # who authors both — the substrate passes the Body through unread.
+  mkOutputsTerminal =
+    evaluate:
+    if !(builtins.isFunction evaluate || (builtins.isAttrs evaluate && evaluate ? __functor)) then
+      throw "gen-bind.crossing.mkOutputsTerminal: `evaluate` must be a function from the Body to the outputs, not a ${builtins.typeOf evaluate}"
+    else
       {
         locateConfig = null;
 
@@ -547,19 +530,7 @@ let
           bindArgEnv = null;
           wrapFn = null;
 
-          wrapUnit =
-            body: _units:
-            (evalFlakeModule
-              {
-                inputs = inputs // {
-                  inherit self;
-                };
-              }
-              {
-                imports = body;
-                inherit systems;
-              }
-            ).config.flake;
+          wrapUnit = body: _units: evaluate body;
 
           inherit interpret;
 
@@ -567,20 +538,18 @@ let
           # previous revision left this to the builder's judgment; the ground it
           # gave (the §2.3.3(a) bar above) does not reach `thunkBindings` — that
           # bar scopes to `bindFormals`/`bindArgEnv`/`wrapFn`/`extent`/`bindings`,
-          # the flake adapter's OFFERED POSITIONS, and `thunkBindings` is not in
+          # the outputs adapter's OFFERED POSITIONS, and `thunkBindings` is not in
           # `fields` (`crossing-adapter.nix`), so it is not an offered position on
           # the bar's own text. `bindFormals = null` above means nothing crosses
           # and no thunk can be selected regardless of this value.
           thunkBindings = null;
         };
-      }
-    )
-  );
+      };
 in
 {
   inherit
     injectAdapter
     mkHostedTerminal
-    mkFlakeTerminal
+    mkOutputsTerminal
     ;
 }
