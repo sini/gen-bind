@@ -4,7 +4,7 @@
 # Spec: specs/2026-08-18-gen-crossing-rederivation-spec.md §2.6 (the queries and
 # the discipline on consuming them), §2.8 (the linkset), §2.11 (the close row).
 #
-#   E(u)      = union { delta(binding(c)) | c a crossing of unit u }  minus  {u}
+#   E(u)      = union { delta(name(c)) | c a crossing of unit u }  minus  {u}
 #   coherent  = E(u) subset-of members
 #   linked(u) = E(u) is empty
 #
@@ -65,7 +65,7 @@ let
       ok { members = prelude.unique l.members; };
 
   # E(u), over the crossings of one unit. `crossings` is the crossing NODE list;
-  # each node names its binding as a relatum, and the demand set is read from the
+  # the demand set is read by each node's `name`, its binding's key, from the
   # MATERIALIZED projection, never re-queried from the relation — one discipline,
   # both consumers, because giving it to one and not the other leaves the failure
   # exactly where it was.

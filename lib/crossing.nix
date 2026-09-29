@@ -31,8 +31,8 @@
 # binding relatum is the binding's KEY, so the body enters no mint, and bindings
 # under distinct keys never share a crossing. Two bindings under ONE key meet only
 # at content merge, where refusal stays available (ADR-0034's bme8i rider;
-# specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.2). Until it lands,
-# `merge` keeps the right operand's node for a shared crossing id.
+# specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.2); `merge` keeps
+# the right operand's node for a shared crossing id.
 { prelude, graph }:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
@@ -653,7 +653,7 @@ let
         witness = {
           object = "Registration";
           field = "bindingIdentities";
-          reason = "the supply was not registered through this operation set's `registerSupply`";
+          reason = "the supply was not registered through `registerSupply`";
         };
       }
     else if danglingHeads != [ ] then
