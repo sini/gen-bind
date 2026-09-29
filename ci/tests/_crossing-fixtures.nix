@@ -126,7 +126,7 @@ rec {
     let
       p = proj bindings;
       f = x.declare (sig imports) body;
-      l = x.link target p (supply bindings) f.value;
+      l = x.link target (reg bindings).value f.value;
     in
     if x.isRefusal f then
       f

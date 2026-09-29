@@ -18,6 +18,7 @@ let
     sig
     imp
     proj
+    reg
     supply
     plainB
     termedB
@@ -64,7 +65,7 @@ let
     let
       frag = x.declare (sig simpleImports) { kind = "body"; };
     in
-    x.link "igloo" (proj simpleBindings) (supply simpleBindings) frag.value;
+    x.link "igloo" (reg simpleBindings).value frag.value;
 
   nodesOf = frag: builtins.map (id: frag.nodes.${id}) frag.crossings;
 
@@ -154,7 +155,7 @@ in
     expr =
       let
         frag = x.declare (sig (simpleImports // { extra = imp c.any; })) null;
-        l = x.link "igloo" (proj simpleBindings) (supply simpleBindings) frag.value;
+        l = x.link "igloo" (reg simpleBindings).value frag.value;
       in
       builtins.attrNames (x.residue l.value).imports;
     expected = [ "extra" ];
@@ -377,7 +378,7 @@ in
         };
         frag = x.declare (sig { reader = imp c.any; }) null;
       in
-      codeOf (x.link "igloo" (proj bindings) (supply bindings) frag.value);
+      codeOf (x.link "igloo" (reg bindings).value frag.value);
     expected = "readctx-unresolvable-sibling";
   };
 
@@ -394,15 +395,17 @@ in
         }) null;
       in
       codeOf (
-        x.link "igloo" (proj bindings) (
-          (supply bindings)
-          // {
-            proposals.a = {
-              policy = "first";
-              origin = "proposer";
-            };
-          }
-        ) frag.value
+        x.link "igloo"
+          (x.registerSupply (
+            (supply bindings)
+            // {
+              proposals.a = {
+                policy = "first";
+                origin = "proposer";
+              };
+            }
+          )).value
+          frag.value
       );
     expected = "proposal-against-sealed";
   };
@@ -418,7 +421,7 @@ in
         };
         frag = x.declare (sig { a = imp c.any; }) null;
       in
-      (x.link "igloo" { } (supply bindings) frag.value).refusal.witness.names;
+      (x.link "igloo" ((reg bindings).value // { projection = { }; }) frag.value).refusal.witness.names;
     expected = [ "a" ];
   };
 
@@ -430,13 +433,13 @@ in
         };
         frag = x.declare (sig { a = imp c.any; }) null;
       in
-      x.isOk (x.link "igloo" (proj bindings) (supply bindings) frag.value);
+      x.isOk (x.link "igloo" (reg bindings).value frag.value);
     expected = true;
   };
 
   flake.tests.crossing-operations.test-link-refuses-a-forged-token = {
     expr = codeOf (
-      x.link "igloo" { } (supply { }) {
+      x.link "igloo" (reg { }).value {
         signature = sig { };
         token = {
           __fragmentToken = "forged";
@@ -478,8 +481,7 @@ in
           db = plainB "postgres";
         };
         ids =
-          decl:
-          (x.link "igloo" (proj b) (supply b) (x.declare (sig { db = decl; }) null).value).value.crossings;
+          decl: (x.link "igloo" (reg b).value (x.declare (sig { db = decl; }) null).value).value.crossings;
       in
       ids (imp c.any) != ids (imp (c.prop "isString"));
     expected = true;
@@ -492,8 +494,7 @@ in
           db = plainB "postgres";
         };
         ids =
-          decl:
-          (x.link "igloo" (proj b) (supply b) (x.declare (sig { db = decl; }) null).value).value.crossings;
+          decl: (x.link "igloo" (reg b).value (x.declare (sig { db = decl; }) null).value).value.crossings;
       in
       ids (imp c.any) == ids ((imp c.any) // { origin = "another-declarer"; });
     expected = true;
@@ -538,7 +539,7 @@ in
           db = plainB "postgres";
         };
         declared = contract: (x.declare (sig { db = imp contract; }) null).value;
-        linkedA = (x.link "igloo" (proj b) (supply b) (declared c.any)).value;
+        linkedA = (x.link "igloo" (reg b).value (declared c.any)).value;
         unlinkedB = declared (c.prop "isString");
       in
       builtins.map (r: r.refusal.code or "admitted") [
@@ -562,7 +563,7 @@ in
           db = plainB "postgres";
         };
         declared = contract: (x.declare (sig { db = imp contract; }) null).value;
-        linkedA = (x.link "igloo" (proj b) (supply b) (declared c.any)).value;
+        linkedA = (x.link "igloo" (reg b).value (declared c.any)).value;
         gated =
           other:
           x.gate {
@@ -657,8 +658,8 @@ in
       let
         frag = x.declare (sig simpleImports) { kind = "body"; };
       in
-      (x.link { identity = "thimble:x"; } (proj simpleBindings) (supply simpleBindings) frag.value)
-      .refusal.code or "minted-silently";
+      (x.link { identity = "thimble:x"; } (reg simpleBindings).value frag.value).refusal.code
+        or "minted-silently";
     expected = "relatum-not-reference";
   };
 
@@ -686,8 +687,8 @@ in
           base = plainB 1;
         };
       in
-      (x.link "igloo" (proj b) (supply b) frag.value).value.crossings
-      != (other.link "igloo" (proj b) (supply b) frag.value).value.crossings;
+      (x.link "igloo" (reg b).value frag.value).value.crossings
+      != (other.link "igloo" (other.registerSupply (supply b)).value frag.value).value.crossings;
     expected = true;
   };
 
@@ -702,12 +703,13 @@ in
       "link"
       "close"
       "residue"
+      "registerSupply"
       "referenceHashIdentity"
     ];
     expected = [ ];
   };
 
-  flake.tests.crossing-operations.test-control-mkOperations-yields-the-six-operations = {
+  flake.tests.crossing-operations.test-control-mkOperations-yields-the-operation-set = {
     expr = builtins.attrNames (published.mkOperations { hashIdentity = _testHashIdentity; }).value;
     expected = [
       "close"
@@ -715,6 +717,7 @@ in
       "gate"
       "link"
       "merge"
+      "registerSupply"
       "residue"
     ];
   };
