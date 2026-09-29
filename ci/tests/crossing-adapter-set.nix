@@ -53,6 +53,7 @@
   genBind,
   graph,
   lib,
+  prelude,
   ...
 }:
 let
@@ -1040,16 +1041,22 @@ in
   # them is the retired framework name either, so the property this oracle
   # tests (no `nodes` among the carriage formals) is unaffected; only the
   # exact set grew.
+  # ★ THE ADAPTER IS A `prelude.door` (den-hoag-54al9), a functor, so the reader is
+  # gen-prelude's functor-aware `functionArgs` (the builtin aborts on a functor),
+  # and the formal set is the door's published contract: the five required members
+  # and the two optional ones, `passthrough` and `thunkBindings`.
   flake.tests.crossing-adapter-set.test-o-name-1b-carriage-formals-carry-no-framework-name = {
     expr = builtins.sort builtins.lessThan (
-      builtins.attrNames (builtins.functionArgs hostedTerminal.adapter)
+      builtins.attrNames (prelude.functionArgs hostedTerminal.adapter)
     );
     expected = [
       "extent"
       "extraModules"
       "marksOf"
+      "passthrough"
       "peerGraph"
       "readerId"
+      "thunkBindings"
     ];
   };
   # CONTROL, same predicate, same run — `nodes` is genuinely absent from the
@@ -1058,7 +1065,7 @@ in
   # identical to the row above.
   flake.tests.crossing-adapter-set.test-o-name-1b-control-nodes-absent-here-present-at-the-target = {
     expr = {
-      inCarriageFormals = builtins.functionArgs hostedTerminal.adapter ? nodes;
+      inCarriageFormals = prelude.functionArgs hostedTerminal.adapter ? nodes;
       inTargetArgs = specialArgsOf systemClosed ? nodes;
     };
     expected = {

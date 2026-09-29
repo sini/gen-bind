@@ -16,18 +16,20 @@
 #   - a non-default option reaches the partially applied door and moves the answer (G3)
 #   - a record whose row carries `typo` refuses that misspelling written in place of a field (den-hoag-ekum1)
 #   - a CLOSED record step (den-hoag-ekum1) admits its good record, and refuses a field outside its closed
-#     set and a non-attrset — each of which its native closed formal aborted on uncatchably
+#     set and a non-attrset — each of which its native closed formal aborted on uncatchably — and, where
+#     it has required fields (den-hoag-54al9), refuses each one missing
 #
 # `tests` pins what each step ADMITS/REFUSES and that every refusal is catchable; `testsError` pins
 # WHICH refusal fired and that it names the door first (R6).
 {
   genBind,
+  graph,
   prelude,
   lib,
   ...
 }:
 let
-  F = import ./_door-table.nix { inherit genBind lib; };
+  F = import ./_door-table.nix { inherit genBind graph lib; };
 
   applied = step: r: (builtins.tryEval (builtins.seq (step r) true)).success;
   unknown = {
@@ -37,6 +39,7 @@ let
   flag = v: names: lib.genAttrs names (_: v);
   guarded = lib.filterAttrs (_: r: r ? guardedBy) F.records;
   misspellable = lib.filterAttrs (_: r: r ? typo) F.records;
+  closedRequiring = lib.filterAttrs (_: r: r ? required) F.closed;
 
   # Every options door on the published surface (depth <= 2), read off its `__contract` rather than
   # a hand list, so a new one is seen whether or not a row was written for it.
@@ -102,12 +105,25 @@ let
         };
       }
     );
-  closedGoldens = key: row: {
-    "test-${key}-extra-field-message" = {
-      expr = row.step (row.good // { ${row.extra} = 1; });
-      expectedError = pin key "'${row.extra}' is not an option of this door; the options are closed [(]accepted: ${quoted row.accepted}[)] [(]in prelude[.]checkOptions[)]";
-    };
-  };
+  closedGoldens =
+    key: row:
+    {
+      "test-${key}-extra-field-message" = {
+        expr = row.step (row.good // { ${row.extra} = 1; });
+        expectedError = pin key "'${row.extra}' is not an option of this door; the options are closed [(]accepted: ${quoted row.accepted}[)] [(]in prelude[.]checkOptions[)]";
+      };
+    }
+    // lib.optionalAttrs (row ? required) (
+      lib.listToAttrs (
+        map (f: {
+          name = "test-${key}-missing-${f}-message";
+          value = {
+            expr = row.step (builtins.removeAttrs row.good [ f ]);
+            expectedError = pin key "required field '${f}' is missing [(]required: ${quoted row.required}[)] [(]in prelude[.]checkRequired[)]";
+          };
+        }) row.required
+      )
+    );
 in
 {
   flake.tests.door-checks = {
@@ -152,7 +168,10 @@ in
           "wrapAll"
           "wrapIdentity"
         ];
-        closed = [ "composeWith" ];
+        closed = [
+          "composeWith"
+          "crossing.mkHostedTerminal.adapter"
+        ];
         records = [
           "buildSignature"
           "crossing.binding.plain"
@@ -304,6 +323,14 @@ in
     test-a-non-attrset-record-is-refused-catchably-at-every-closed-step = {
       expr = each (d: applied d.step 1) F.closed;
       expected = each (_: false) F.closed;
+    };
+    # den-hoag-54al9: each required field of a closed step, dropped in turn, is refused. The answer is
+    # the fields whose absence was ADMITTED; each was an uncatchable native abort before the door.
+    test-each-missing-required-field-is-refused-catchably-at-every-closed-step = {
+      expr = each (
+        d: builtins.filter (f: applied d.step (builtins.removeAttrs d.good [ f ])) d.required
+      ) closedRequiring;
+      expected = each (_: [ ]) closedRequiring;
     };
   };
 

@@ -13,16 +13,35 @@
 # A record row may also carry `typo`, a misspelling of `drop` written IN PLACE of it: every field
 # of such a record is required, so the misspelling leaves `drop` missing and an open door refuses it.
 #
-# A CLOSED record step (den-hoag-ekum1) has only optional fields, so a misspelling is an unknown field
-# and only closure refuses it: a row is the step as applied, a `good` record, `extra`, a field outside
-# the closed set, and `accepted`, that set. `composeWith`'s layer is the one, a door behind a
-# positional list, so it is reached through `composeWith [ layer ]`.
+# A CLOSED record step (den-hoag-ekum1) refuses a field outside its closed set, so a misspelling is an
+# unknown field and closure refuses it: a row is the step as applied, a `good` record, `extra`, a field
+# outside the closed set, and `accepted`, that set (required, then optional). `composeWith`'s layer is
+# one, a door behind a positional list, so it is reached through `composeWith [ layer ]`. A closed
+# step with required fields carries `required` too, and each is dropped in turn: `mkHostedTerminal`'s
+# adapter carriage (den-hoag-54al9), a total key set of five required members and two optional ones.
 #
 # The positional doors (`adaptArgs`, `stripBindingArgs`) carry no row: their arity is structural and
 # they have no field check.
-{ genBind, lib }:
+{
+  genBind,
+  graph,
+  lib,
+}:
 let
   inherit (genBind.crossing) binding term;
+
+  hostedTerminal = genBind.crossing.mkHostedTerminal {
+    evaluator = _: { };
+    locateConfig = _: { };
+    class = "host";
+  };
+  adapterRequired = [
+    "extent"
+    "extraModules"
+    "peerGraph"
+    "marksOf"
+    "readerId"
+  ];
 
   # A module reading one arg, defaulted, so the `{ }` call answers too.
   reads =
@@ -320,6 +339,22 @@ in
         "provenance"
         "contracts"
         "mergeStrategies"
+      ];
+    };
+    "crossing.mkHostedTerminal.adapter" = {
+      step = hostedTerminal.adapter;
+      required = adapterRequired;
+      good = {
+        extent.a = 1;
+        extraModules = [ ];
+        peerGraph = graph.labeledFrom { peer = _: [ "a" ]; } [ "a" ];
+        marksOf = _: [ ];
+        readerId = "a";
+      };
+      extra = "thunkBngings";
+      accepted = adapterRequired ++ [
+        "passthrough"
+        "thunkBindings"
       ];
     };
   };

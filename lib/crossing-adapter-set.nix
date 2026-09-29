@@ -230,12 +230,33 @@ let
   # (`crossing.nix`). The narrowing above was not wrong to keep the channel
   # shut for the five that remain; an execution authorization is not a
   # convenience member, and this is why it alone was reopened.
+  # ★★ THE ADAPTER CARRIAGE IS A CLOSED DOOR (den-hoag-54al9, ADR-0025 item 1): five required
+  # members and two optional ones, and no others. Its key set is TOTAL: an open (R5) door would
+  # admit a misspelt `thunkBngings` beside the five, which reads as `null` below, and the raw marker
+  # would cross verbatim into the target with no refusal. So a missing member, which the native
+  # required formal aborted on uncatchably, and an unknown one are both refused by name, catchably,
+  # by one construction. `peerGraph`, `marksOf` and `readerId` are required and never defaulted
+  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4, Q4).
+  adapterDoor = prelude.door {
+    name = "gen-bind.crossing.mkHostedTerminal.adapter";
+    required = [
+      "extent"
+      "extraModules"
+      "peerGraph"
+      "marksOf"
+      "readerId"
+    ];
+    optional = [
+      "passthrough"
+      "thunkBindings"
+    ];
+  };
+
   # THE RECORD (den-hoag-7gp66 P2, R7 (a)): the injected evaluator, the config locator and the
   # class are three configuration operands of a constructor with no subject and no order among
   # them, so they stay ONE required-argument record. It is a `prelude.door` (open, R5): a missing
-  # field is refused by name, catchably, when the record is applied. The nested `.adapter` function
-  # returned below is a depth-3 construct with its own pre-existing, hand-rolled catchable check
-  # (`unknownCarriageMembers`).
+  # field is refused by name, catchably, when the record is applied. The nested `.adapter` it
+  # returns is a door of its own, `adapterDoor` above.
   mkHostedTerminal =
     prelude.door
       {
@@ -255,7 +276,7 @@ let
         {
           inherit locateConfig;
 
-          adapter =
+          adapter = adapterDoor (
             {
               extent,
               extraModules,
@@ -273,38 +294,9 @@ let
               # that can be written.
               thunkBindings = carriage.thunkBindings or null;
 
-              # ★★ THE CARRIAGE'S KEY SET IS TOTAL (the C4 repair). `{ ..., ... }@carriage`
-              # otherwise swallows any unrecognised member silently, and with the
-              # site-3 value-shape sniff retired (§2.5) a misspelt member
-              # (`thunkBngings`) becomes a SILENT WRONG-DATA PATH: it resolves to
-              # `null` here, `mkAdapter` sees a validly-`null` member, and the raw
-              # marker crosses verbatim into the target with no refusal and no
-              # warning — against ADR-0025 item 1. Named by name, matching the
-              # `passthrough ? nodes` throw below; over the KEY SET only, forcing
-              # nothing the adapter does not already force.
-              #
-              # `peerGraph`, `marksOf` and `readerId` joined this set as REQUIRED,
-              # never-defaulted members (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md
-              # §4.4, Q4 RULED: "the marks accessor is a required argument, never
-              # defaulted"). They are pattern-matched above with no `?` default,
-              # so Nix's own "called without required argument" refuses a missing
-              # one at the call — the same total, visible posture `extent` and
-              # `extraModules` already had. `peerGraph` is Q3-generic by
-              # construction: this file never builds one (§4.3 Q3 stays a fork,
-              # unpicked here) — it only consumes whatever `gen-graph.labeledFrom`-
-              # shaped `labeledGraph` value the caller hands it.
-              knownCarriageMembers = [
-                "extent"
-                "extraModules"
-                "passthrough"
-                "thunkBindings"
-                "peerGraph"
-                "marksOf"
-                "readerId"
-              ];
-              unknownCarriageMembers = builtins.filter (k: !(builtins.elem k knownCarriageMembers)) (
-                builtins.attrNames carriage
-              );
+              # `peerGraph` is Q3-generic by construction: this file never builds one
+              # (§4.3 Q3 stays a fork, unpicked here) — it only consumes whatever
+              # `gen-graph.labeledFrom`-shaped `labeledGraph` value the caller hands it.
 
               # ── the peer-relation bound (Q5 Arm A) ──────────────────────────
               # `gen-graph.boundedBy` IS ADR-0026's mechanism, already shipped —
@@ -338,139 +330,137 @@ let
                 withheld = bounded.withheld readerId;
               };
             in
-            if unknownCarriageMembers != [ ] then
-              throw "gen-bind: mkHostedTerminal: adapter invoked with unrecognised carriage member(s) [ ${builtins.concatStringsSep " " unknownCarriageMembers} ] — accepted members are extent, extraModules, passthrough, thunkBindings, peerGraph, marksOf, readerId."
-            else
-              {
-                inherit thunkBindings peerRelation;
+            {
+              inherit thunkBindings peerRelation;
 
-                # `Body` is the class module LIST. The design of record's amendment A
-                # rules this identification by name: `wrapAll`'s partial
-                # application into the module functions' formal parameters IS
-                # `Adapter.bindFormals`. `.all` = the wrapped modules plus the
-                # merge-collision validators — the collision class's named surface
-                # (see the header block above).
-                #
-                # ★★★ ADR-0023 (b) SITE 6 — THE WRAPPING PLACEMENT ITSELF IS A
-                # CROSSING, ON THE PARTIAL-APPLICATION BRANCH ONLY.
-                #
-                # (i) THIS SITE DOES NOT MEET ADR-0023 (c). `wrapAllCore`'s
-                # partial-application branch (`wrap.nix`, `wrapFunctionModule`) places
-                # `setFunctionArgs wrapper remainingArgs` — a SUBSTRATE-AUTHORED
-                # `__functor` attrset carrying `__functionArgs` whose advertised formals
-                # OMIT the bound name — into the target's module set, which then CALLS
-                # it. The consumer handed a bare lambda; what crosses under
-                # `bindFormals` is not it. Measured (O-2): stock head keys
-                # `[ "__functionArgs" "__functor" ]`, advertising `[ "other" ]` with `x`
-                # stripped; the discriminating predicate is AUTHORSHIP, not
-                # `anyFunction`, which reads `true` on every function-shaped consumer
-                # regardless and cannot discriminate (rejected, §2.7).
-                #
-                # ★ SCOPED TO ONE OF THREE PLACEMENT BRANCHES, NOT EVERY FUNCTION-SHAPED
-                # MODULE. A consumer whose class module binds every formal
-                # (`allMatched == true`) is CALLED and its own returned attrset is
-                # placed (`wrap.nix`, head keys `[ "config" ]`, no substrate
-                # authorship); a consumer with no formal bound at all is placed
-                # unchanged (passthrough). The price below is owed only on the
-                # partial-application branch; charging every function-shaped module
-                # would overclaim two branches this site never touches.
-                #
-                # (ii) THE PRICE: a substrate closure — the `wrapper` `wrap.nix` builds
-                # — executes inside the target's evaluation every time the target's
-                # module system calls it, reading `moduleCallArgs` (whatever the
-                # target's own evaluation supplies at that position) and the bound
-                # `bindings`, and it can throw anything the wrapped consumer module
-                # throws, plus `evalModules`'s own arity errors if the target calls it
-                # with the wrong shape.
-                #
-                # (iii) THE ARGUED IMPOSSIBILITY: `injectAdapter` above shows an
-                # alternative placement exists — an arg-environment writer
-                # (`_module.args`) rather than a formal partial application — but
-                # substituting it is NOT a (c)-preserving repair here: it is a REACH
-                # WIDENING, measured (O-INJ-3): a module the substrate never saw,
-                # reached only by a target-side `imports` from one it did see, FAILS
-                # under stock formal partial application (`attribute 'x' missing`) and
-                # READS THE BINDING under the seeded `_module.args` placement — the
-                # substitution widens every binding's reach to modules never inspected.
-                # That arm is spent, not unexplored. AND THE QUESTION IT STOOD IN FOR
-                # IS ANSWERED, DEFINITIONALLY rather than by this site's particulars:
-                # ADR-0023 (c)'s target is "the invariant holds UNQUALIFIED, BY
-                # CONSTRUCTION — what crosses is provably plain data", and partial
-                # application must leave a CALLABLE RESIDUAL for the unbound formal —
-                # a callable residual is not plain data, so (c) admits no Adapter that
-                # binds by genuine partial application, at any site. With that channel
-                # closed by definition and the only alternative closed by the reach
-                # widening above, ADR-0013 does not leave a scope limit to close on
-                # here — it MANDATES the declaration, the argued impossibility this
-                # record now states rather than a scope limit on the record itself.
-                # WHAT WOULD HAVE TO CHANGE for this to re-derive: (c) would have to
-                # admit a function-shaped crossing value as plain data, or a SCOPED
-                # alternative to `_module.args` — reaching only the modules this
-                # Adapter actually wrapped, not the target's whole evaluation — would
-                # have to exist. Neither obtains today, so this site stays declared
-                # PERMANENT under (b), structurally parallel to site 3's execution
-                # declaration.
-                bindFormals =
-                  values: body:
-                  (wrapLib.wrapAllCore {
-                    modules = body;
-                    bindings = values;
-                    inherit thunkBindings;
-                  }).all;
+              # `Body` is the class module LIST. The design of record's amendment A
+              # rules this identification by name: `wrapAll`'s partial
+              # application into the module functions' formal parameters IS
+              # `Adapter.bindFormals`. `.all` = the wrapped modules plus the
+              # merge-collision validators — the collision class's named surface
+              # (see the header block above).
+              #
+              # ★★★ ADR-0023 (b) SITE 6 — THE WRAPPING PLACEMENT ITSELF IS A
+              # CROSSING, ON THE PARTIAL-APPLICATION BRANCH ONLY.
+              #
+              # (i) THIS SITE DOES NOT MEET ADR-0023 (c). `wrapAllCore`'s
+              # partial-application branch (`wrap.nix`, `wrapFunctionModule`) places
+              # `setFunctionArgs wrapper remainingArgs` — a SUBSTRATE-AUTHORED
+              # `__functor` attrset carrying `__functionArgs` whose advertised formals
+              # OMIT the bound name — into the target's module set, which then CALLS
+              # it. The consumer handed a bare lambda; what crosses under
+              # `bindFormals` is not it. Measured (O-2): stock head keys
+              # `[ "__functionArgs" "__functor" ]`, advertising `[ "other" ]` with `x`
+              # stripped; the discriminating predicate is AUTHORSHIP, not
+              # `anyFunction`, which reads `true` on every function-shaped consumer
+              # regardless and cannot discriminate (rejected, §2.7).
+              #
+              # ★ SCOPED TO ONE OF THREE PLACEMENT BRANCHES, NOT EVERY FUNCTION-SHAPED
+              # MODULE. A consumer whose class module binds every formal
+              # (`allMatched == true`) is CALLED and its own returned attrset is
+              # placed (`wrap.nix`, head keys `[ "config" ]`, no substrate
+              # authorship); a consumer with no formal bound at all is placed
+              # unchanged (passthrough). The price below is owed only on the
+              # partial-application branch; charging every function-shaped module
+              # would overclaim two branches this site never touches.
+              #
+              # (ii) THE PRICE: a substrate closure — the `wrapper` `wrap.nix` builds
+              # — executes inside the target's evaluation every time the target's
+              # module system calls it, reading `moduleCallArgs` (whatever the
+              # target's own evaluation supplies at that position) and the bound
+              # `bindings`, and it can throw anything the wrapped consumer module
+              # throws, plus `evalModules`'s own arity errors if the target calls it
+              # with the wrong shape.
+              #
+              # (iii) THE ARGUED IMPOSSIBILITY: `injectAdapter` above shows an
+              # alternative placement exists — an arg-environment writer
+              # (`_module.args`) rather than a formal partial application — but
+              # substituting it is NOT a (c)-preserving repair here: it is a REACH
+              # WIDENING, measured (O-INJ-3): a module the substrate never saw,
+              # reached only by a target-side `imports` from one it did see, FAILS
+              # under stock formal partial application (`attribute 'x' missing`) and
+              # READS THE BINDING under the seeded `_module.args` placement — the
+              # substitution widens every binding's reach to modules never inspected.
+              # That arm is spent, not unexplored. AND THE QUESTION IT STOOD IN FOR
+              # IS ANSWERED, DEFINITIONALLY rather than by this site's particulars:
+              # ADR-0023 (c)'s target is "the invariant holds UNQUALIFIED, BY
+              # CONSTRUCTION — what crosses is provably plain data", and partial
+              # application must leave a CALLABLE RESIDUAL for the unbound formal —
+              # a callable residual is not plain data, so (c) admits no Adapter that
+              # binds by genuine partial application, at any site. With that channel
+              # closed by definition and the only alternative closed by the reach
+              # widening above, ADR-0013 does not leave a scope limit to close on
+              # here — it MANDATES the declaration, the argued impossibility this
+              # record now states rather than a scope limit on the record itself.
+              # WHAT WOULD HAVE TO CHANGE for this to re-derive: (c) would have to
+              # admit a function-shaped crossing value as plain data, or a SCOPED
+              # alternative to `_module.args` — reaching only the modules this
+              # Adapter actually wrapped, not the target's whole evaluation — would
+              # have to exist. Neither obtains today, so this site stays declared
+              # PERMANENT under (b), structurally parallel to site 3's execution
+              # declaration.
+              bindFormals =
+                values: body:
+                (wrapLib.wrapAllCore {
+                  modules = body;
+                  bindings = values;
+                  inherit thunkBindings;
+                }).all;
 
-                # No hosted-terminal name is target-invoked. A `false` congruence
-                # predicate meets `adapterMissingTargetInvoked` and is refused by name
-                # rather than falling back to a channel that binds it at target time.
-                bindArgEnv = null;
-                wrapFn = null;
+              # No hosted-terminal name is target-invoked. A `false` congruence
+              # predicate meets `adapterMissingTargetInvoked` and is refused by name
+              # rather than falling back to a channel that binds it at target time.
+              bindArgEnv = null;
+              wrapFn = null;
 
-                # Amendment A: `Adapter.wrapUnit` performs the assembly `wrapAll`
-                # returns as a list. `_units` is dead by construction (see
-                # `injectAdapter` above).
-                wrapUnit =
-                  body: _units:
-                  evaluator {
-                    modules = body ++ extraModules;
-                    # ★ THE TWO SIDES ARE DIFFERENT CONTRACTS AND THE SPLIT IS WHAT
-                    # KEEPS THEM APART. `nodes` here is TARGET-FACING — what a class
-                    # module reads as `nodes.<peer>.config` — and it stays `nodes` by
-                    # construction, because after the split nothing derives it from the
-                    # carriage name (spec §2.5: "nodes stays the target-facing name").
-                    # The carriage side is `extent`: the realized set for this class,
-                    # whose spine is the class's node keys. **What lands here is
-                    # `admittedExtent`, not `extent`** — the admitted-key restriction
-                    # under this reading node's marks (§2.1), never the whole class and
-                    # never `bounded`/`bounded.nodes` (§2.1, §2.3: `boundedBy` inherits
-                    # `nodes` unchanged, so that value would emit every withheld peer's
-                    # key too).
-                    #
-                    # `passthrough` is the TARGET-OWNED channel and it splices WHOLE.
-                    # Its keys are the consumer's own — `osConfig` is home-manager's arg
-                    # name and is correct AT the surface — so this adapter names none of
-                    # them. Pinning one framework's field name in a substrate-facing
-                    # contract is the defect the carriage rename removed; re-reading it
-                    # here would put it straight back one layer down.
-                    #
-                    # ★ AND THE CHANNEL MAY NOT SHADOW A KEY THIS ADAPTER EMITS. `//`
-                    # gives the right operand priority, so a consumer key named `nodes`
-                    # would REPLACE the peer set — silently, because the target arg is
-                    # still present and still called `nodes`. The check reads the
-                    # channel's SPINE, never its contents, so the opacity above holds:
-                    # `?` forces nothing the `//` does not already force. Refusal is the
-                    # only non-silent option; merging the other way round would drop the
-                    # consumer's key instead.
-                    specialArgs =
-                      let
-                        passthrough = carriage.passthrough or { };
-                      in
-                      if passthrough ? nodes then
-                        throw "gen-bind: mkHostedTerminal: the target-owned passthrough carries `nodes`, which this adapter emits itself — splicing it would silently replace the peer set. Rename that key in the passthrough."
-                      else
-                        { nodes = admittedExtent; } // passthrough;
-                  };
+              # Amendment A: `Adapter.wrapUnit` performs the assembly `wrapAll`
+              # returns as a list. `_units` is dead by construction (see
+              # `injectAdapter` above).
+              wrapUnit =
+                body: _units:
+                evaluator {
+                  modules = body ++ extraModules;
+                  # ★ THE TWO SIDES ARE DIFFERENT CONTRACTS AND THE SPLIT IS WHAT
+                  # KEEPS THEM APART. `nodes` here is TARGET-FACING — what a class
+                  # module reads as `nodes.<peer>.config` — and it stays `nodes` by
+                  # construction, because after the split nothing derives it from the
+                  # carriage name (spec §2.5: "nodes stays the target-facing name").
+                  # The carriage side is `extent`: the realized set for this class,
+                  # whose spine is the class's node keys. **What lands here is
+                  # `admittedExtent`, not `extent`** — the admitted-key restriction
+                  # under this reading node's marks (§2.1), never the whole class and
+                  # never `bounded`/`bounded.nodes` (§2.1, §2.3: `boundedBy` inherits
+                  # `nodes` unchanged, so that value would emit every withheld peer's
+                  # key too).
+                  #
+                  # `passthrough` is the TARGET-OWNED channel and it splices WHOLE.
+                  # Its keys are the consumer's own — `osConfig` is home-manager's arg
+                  # name and is correct AT the surface — so this adapter names none of
+                  # them. Pinning one framework's field name in a substrate-facing
+                  # contract is the defect the carriage rename removed; re-reading it
+                  # here would put it straight back one layer down.
+                  #
+                  # ★ AND THE CHANNEL MAY NOT SHADOW A KEY THIS ADAPTER EMITS. `//`
+                  # gives the right operand priority, so a consumer key named `nodes`
+                  # would REPLACE the peer set — silently, because the target arg is
+                  # still present and still called `nodes`. The check reads the
+                  # channel's SPINE, never its contents, so the opacity above holds:
+                  # `?` forces nothing the `//` does not already force. Refusal is the
+                  # only non-silent option; merging the other way round would drop the
+                  # consumer's key instead.
+                  specialArgs =
+                    let
+                      passthrough = carriage.passthrough or { };
+                    in
+                    if passthrough ? nodes then
+                      throw "gen-bind: mkHostedTerminal: the target-owned passthrough carries `nodes`, which this adapter emits itself — splicing it would silently replace the peer set. Rename that key in the passthrough."
+                    else
+                      { nodes = admittedExtent; } // passthrough;
+                };
 
-                inherit interpret;
-              };
+              inherit interpret;
+            }
+          );
         }
       );
 
