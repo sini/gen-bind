@@ -28,6 +28,7 @@ let
 
   node = n: {
     binding = n;
+    name = n;
     import = n;
     target = "igloo";
     record = bindings.${n};
@@ -118,6 +119,7 @@ in
         chainProjection = proj chainBindings;
         crossingOn = n: {
           binding = n;
+          name = n;
           import = n;
           target = "igloo";
           record = chainBindings.${n};

@@ -407,7 +407,8 @@ gated = genBind.configGate {
 **The demand relation is DERIVED, not declared.** `ReadFrom` is the one former that names a unit, and the demand set is computed by structural recursion over a closed, first-order body-term algebra:
 
 ```nix
-b = genBind.crossing;
+b   = genBind.crossing;
+ops = (b.mkOperations { hashIdentity = yourSubstrateMint; }).value;
 
 supply = {
   bindings = {
@@ -420,7 +421,7 @@ supply = {
   origins = { };
 };
 
-reg = b.registerSupply supply;   # stratifies, refuses a sibling cycle, mints the projection
+reg = ops.registerSupply supply; # stratifies, refuses a sibling cycle, mints the projection and the binding nodes
 reg.value.heights                # { base = 0; derived = 1; opaque = 0; peer = 0; }
 reg.value.projection.peer        # { targets = [ "iceberg" ]; exact = "EXACT"; }
 reg.value.projection.opaque      # { targets = [ "iceberg" ]; exact = "APPROX"; }
@@ -451,16 +452,17 @@ Each constructor's record is an open data record (R5) whose fields are all requi
 
 **Contracts are DATA, checked substrate-side, eagerly and completely.** The vocabulary is a closed first-order algebra carried as tagged terms and interpreted beneath it, so a contract is comparable, hashable and enumerable where a closure is none of those. The check runs *before* the value crosses and it **forces** — the only construction under which the payload contains no reachable function is one where the check has already run and the payload is the checked value. The price is stated rather than absorbed: a contract system is meaning-preserving **or** complete, not both, and this takes completeness, so a violation in a part the target would never have demanded is still reported and a fleet that succeeds today by never forcing a bad part fails under it. It is **opt-in per name** — `Any` is unconstrained said visibly and costs no forcing — so the price is paid where a contract was asked for and nowhere else. Higher-order contracts are **inadmissible**: their two contracts fire on *application*, inside the consuming target, which needs exactly the substrate closure at the installation site that the construction exists to remove.
 
-**The operations exist only once you inject the mint.** The published surface carries the constructors and `mkOperations`; it ships **no minting formula, not even as a convenience default**, because the substrate has exactly one minting authority and a shipped fallback would be a second one — reachable by any consumer who simply omitted the injection, with the omission invisible at the call site. `hashIdentity` is a total field: omitting it refuses by name rather than silently defaulting. Its type is `kind -> [label] -> (label -> InertValue) -> Identity`: it mints crossings and import nodes alike, over inert declaration data.
+**The operations exist only once you inject the mint.** The published surface carries the constructors and `mkOperations`; it ships **no minting formula, not even as a convenience default**, because the substrate has exactly one minting authority and a shipped fallback would be a second one — reachable by any consumer who simply omitted the injection, with the omission invisible at the call site. `hashIdentity` is a total field: omitting it refuses by name rather than silently defaulting. Its type is `kind -> [label] -> (label -> InertValue) -> Identity`: it mints crossings, import nodes and binding nodes alike, over inert declaration data. `registerSupply` is an operation for that reason: it mints the binding nodes.
 
 **A crossing's import relatum is an identity, never a name.** `declare` fixes each import's identity from its name and every compared field of its declaration (`merge`, `contract`, `required`, `sealed`, `satisfiedBy`; `origin` excluded) — the very equality `merge` decides compatibility by. So two declarations of one name that `merge` would refuse are two imports and cross as two crossings, while two declarers of one declaration cross as one. The node's `import` is that identity and its `name` is the import's identifier; name-keyed reads use `name`. The mint is forced lazily, at the first `link` that crosses the name. Every compared field is typed at `declare` and a contract term's record is closed per former, so nothing the mint would refuse reaches it — a wrong type is a refusal, never a throw. `merge` and `gate` compare the *declared* imports, not the residue, so crossing a name first does not admit a differing re-declaration of it.
 
-Two relata are not yet identities. The **target** relatum is the `TargetId` you pass, unchanged: pass the target node's minted identity, because a name is currently **admitted silently** — the refusing door belongs to a shared resolver that is not built. The **binding** relatum is still the binding's name within its supply, pending a reading on what a binding's identity is.
+**A crossing's binding relatum is the binding's KEY, minted.** The key is the binding's name within its supply, and it alone is the preimage: `hashIdentity "binding" [ "key" ] (_: key)`. The body is sealed and enters no mint; a constructor tag, producer, mark or origin in the preimage would give one key two identities. `registerSupply` mints the binding nodes into its result's `bindingIdentities`, one pass before the `link` that relates them, so `link` takes the whole registration and refuses by name (`declaration-missing-field`, `object = "Registration"`) a supply that was not registered. The key is also the import's name, which the import identity already carries, so a crossing is separated by its import and its target. Two bindings under one key meet only at `merge` or a gate; today `merge` keeps the right operand's node for the shared crossing id.
+
+The **target** relatum is the `TargetId` you pass, unchanged: pass the target node's minted identity, because a name is currently **admitted silently** — the refusing door belongs to a shared resolver that is not built.
 
 ```nix
-ops    = (b.mkOperations { hashIdentity = yourSubstrateMint; }).value;
 frag   = ops.declare { imports = { … }; exports = { }; } body;
-linked = ops.link "igloo" reg.value.projection supply frag.value;
+linked = ops.link "igloo" reg.value frag.value;
 unit   = ops.close "igloo" reg.value.projection { members = [ "igloo" "iceberg" ]; } adapter linked.value;
 ```
 
@@ -754,7 +756,7 @@ Terminal-crossing arg-environment (reach/delivery edges, at the evalModules boun
       configGate — mkIf-gate a slice's nested-eval'd config (cf. Cardelli 1997 §5 linkset)
 
 The boundary crossing (a substrate value entering an eval gen does not own)
-registerSupply — stratify the sibling graph, refuse a cycle, mint the projection
+registerSupply — stratify the sibling graph, refuse a cycle, mint the projection and the binding nodes
   |-- strata — the canonical HEIGHT function over the ReadCtx head names
   '-- the structural recursion — (targets, exact) per binding, memoised in stratum order
 declare -> merge / gate -> link -> close

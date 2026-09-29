@@ -15,7 +15,7 @@ in
 {
   # The boundary crossing: the crossing node, its derived demand relation, the
   # body-term algebra, first-order contracts, the Adapter, the Linkset, and the
-  # six operations. Namespaced because it is a surface, not a helper.
+  # operations. Namespaced because it is a surface, not a helper.
   crossing = crossingLib;
 
   inherit (argEnvLib) adaptArgs crossEval configGate;

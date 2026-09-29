@@ -128,7 +128,7 @@ let
         crossings
         projection
         ;
-      demanded = builtins.concatMap (c: deltaLib.demands projection c.binding) (
+      demanded = builtins.concatMap (c: deltaLib.demands projection c.name) (
         builtins.filter traversable crossings
       );
     in

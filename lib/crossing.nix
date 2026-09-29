@@ -1,4 +1,4 @@
-# The crossing — the noun, its identity, and the six operations of the surface.
+# The crossing — the noun, its identity, and the operations of the surface.
 #
 # Spec: specs/2026-08-18-gen-crossing-rederivation-spec.md §2.1 (a crossing is a
 # NODE), §2.2 (the three edges), §2.4 (what stays declared), §2.4a (the
@@ -27,9 +27,12 @@
 #
 # ★ CONTENT-INDEPENDENCE. Two emitters presenting the same relata under
 # different label orders mint ONE crossing; order-insensitivity holds AT THE
-# ENCODING and no caller owes a sort. Two emitters producing the same relata with
-# different content yield one node with contributions from both — refusal at
-# minting is foreclosed, refusal at content merge stays available.
+# ENCODING and no caller owes a sort. Refusal at minting is foreclosed: the
+# binding relatum is the binding's KEY, so the body enters no mint, and bindings
+# under distinct keys never share a crossing. Two bindings under ONE key meet only
+# at content merge, where refusal stays available (ADR-0034's bme8i rider;
+# specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.2). Until it lands,
+# `merge` keeps the right operand's node for a shared crossing id.
 { prelude, graph }:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
@@ -289,6 +292,28 @@ let
     hashIdentity: n: d:
     hashIdentity "import" ([ "name" ] ++ importCompareFields) (l: if l == "name" then n else d.${l});
 
+  # ── registration ─────────────────────────────────────────────────────────────
+  # The BINDING NODE is fixed here (§2.1: "the binding node at emission"), one
+  # pass before the `link` that relates it (ADR-0016 r7). Its identity is its KEY,
+  # the binding's name within its supply, and the key alone: the body is sealed,
+  # and a constructor tag, producer, mark or `origin` in the preimage would give
+  # one key two identities (ADR-0034's bme8i rider;
+  # specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.1). A key is an
+  # attribute name, so an absent one is inexpressible and nothing defaults it.
+  bindingIdentity = hashIdentity: key: hashIdentity "binding" [ "key" ] (_: key);
+
+  mkRegisterSupply =
+    hashIdentity: supply:
+    andThen (deltaLib.registerSupply supply) (
+      r:
+      ok (
+        r
+        // {
+          bindingIdentities = builtins.mapAttrs (n: _: bindingIdentity hashIdentity n) supply.bindings;
+        }
+      )
+    );
+
   mkDeclare =
     hashIdentity: sig: body:
     andThen (checkSignature sig) (
@@ -547,9 +572,14 @@ let
   # that the residue is "recorded at the crossing" has no field to keep it, and
   # deciding the derived class needs a traversal the surface never states. It
   # costs no second walk.
+  #
+  # It takes the supply's REGISTRATION, not the supply and a projection apart:
+  # the binding nodes it relates were minted there, and one record cannot carry a
+  # projection from one registration beside the supply of another.
   mkLink =
-    hashIdentity: targetId: projection: supply: fragment:
+    hashIdentity: targetId: registration: fragment:
     let
+      inherit (registration) supply projection;
       bindings = supply.bindings or { };
       names = builtins.attrNames bindings;
 
@@ -577,20 +607,17 @@ let
       # no node set, so it cannot tell a target node's identity from a name, and
       # a name is admitted SILENTLY; the door is the shared resolver's.
       #
-      # PENDING OWNER READING (the binding relatum). §2.1 says each relatum
-      # contributes "that relatum's identity"; it does not say what a BINDING's
-      # identity is, §2.10's `Binding` carries no identity field, and the one
-      # mint refuses the sealed payloads (`Wrapped.body`, `Scoped.file`) a
-      # structural identity would need. Until that is read, the relatum is the
-      # binding's NAME WITHIN ITS SUPPLY, unique there by construction: two
-      # supplies binding the same name at the same target mint ONE crossing with
-      # contributions from both. This is a pending reading, not a default.
+      # The BINDING relatum is the binding node's identity, minted from its key at
+      # registration (ADR-0034's bme8i rider;
+      # specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.1). The key is
+      # the import's name, which the import identity's preimage already carries,
+      # so a crossing is separated by its import and its target.
       nodeFor =
         n:
         andThen
           (mintIdentity hashIdentity "crossing" {
             import = fragment.importIdentities.${n};
-            binding = n;
+            binding = registration.bindingIdentities.${n};
             target = targetId;
           })
           (
@@ -599,7 +626,7 @@ let
               inherit id;
               name = n;
               import = fragment.importIdentities.${n};
-              binding = n;
+              binding = registration.bindingIdentities.${n};
               target = targetId;
               staticityAdmissible = !(prelude.elem targetId (deltaLib.demands projection n));
               deltaExact = deltaLib.deltaExact projection n;
@@ -619,6 +646,16 @@ let
     in
     if !(tokenValid fragment) then
       tokenRefusal fragment
+    else if !(registration ? bindingIdentities) then
+      refuse {
+        code = codes.declarationMissingField;
+        blamed = party.caller;
+        witness = {
+          object = "Registration";
+          field = "bindingIdentities";
+          reason = "the supply was not registered through this operation set's `registerSupply`";
+        };
+      }
     else if danglingHeads != [ ] then
       refuse {
         code = codes.readCtxUnresolvableSibling;
@@ -1044,6 +1081,7 @@ let
           residue
           ;
         declare = mkDeclare args.hashIdentity;
+        registerSupply = mkRegisterSupply args.hashIdentity;
         link = mkLink args.hashIdentity;
       };
 in
@@ -1078,7 +1116,6 @@ in
     ;
   inherit (bindingLib) binding mark;
   inherit (deltaLib)
-    registerSupply
     strata
     deltaExact
     isExact
