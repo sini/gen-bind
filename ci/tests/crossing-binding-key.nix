@@ -54,6 +54,28 @@ in
     };
   };
 
+  # R2: `link` READS the relatum off the registration, never re-mints it. A different,
+  # well-formed identity planted in `bindingIdentities` must be exactly the node's relatum; a
+  # `link` that re-mints from the key carries the key's own identity instead and goes red here.
+  flake.tests.crossing-binding-key.test-bme8i-link-reads-the-registered-binding-node = {
+    expr =
+      let
+        planted = _testHashIdentity "binding" [ "key" ] (_: "sentinel");
+        forged = registered // {
+          bindingIdentities.db = planted;
+        };
+        l = (x.link "igloo" forged fragment).value;
+      in
+      [
+        (l.nodes.${builtins.head l.crossings}.binding == planted)
+        (planted != node.binding)
+      ];
+    expected = [
+      true
+      true
+    ];
+  };
+
   # R2: a supply that did not pass registration carries no binding nodes, and `link` refuses it
   # by name rather than minting a relatum of its own.
   flake.tests.crossing-binding-key.test-bme8i-link-refuses-an-unregistered-supply = {
@@ -61,7 +83,7 @@ in
     expected = {
       object = "Registration";
       field = "bindingIdentities";
-      reason = "the supply was not registered through this operation set's `registerSupply`";
+      reason = "the supply was not registered through `registerSupply`";
     };
   };
 
