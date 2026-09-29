@@ -36,8 +36,9 @@ let
   #
   # (i) THIS SITE DOES NOT MEET ADR-0023 (c) THROUGH ANY SHIPPED ADAPTER: `contracts`
   # has no Adapter position on `injectAdapter`, `mkHostedTerminal` or
-  # `mkOutputsTerminal` (crossing-adapter-set.nix's cfg-level-channel note: none of the
-  # three forwards a caller's `contracts`), and no value-shape route reaches it the
+  # `mkOutputsTerminal` (crossing-adapter-set.nix, the "AND THE cfg-LEVEL CHANNEL" note
+  # above `mkHostedTerminal`: none of the three forwards a caller's `contracts`), and no
+  # value-shape route reaches it the
   # way site 3's thunk sniff reaches `resolveThunks` — measured, O-4, two arms in one
   # run: the retired direct-call surface (`contracts` passed BY NAME to `wrapCore` /
   # `wrapAllCore`) fires the tripwire, rc=1; the SAME contract-shaped value crossed
