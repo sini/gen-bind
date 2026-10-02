@@ -76,10 +76,15 @@ rec {
       mark = x.mark.open;
     };
 
+  # A value identity is a reference to a node minted in an earlier pass (ADR-0016 r4, r7), never
+  # a bare name; the suite mints its entity nodes through its own stand-in.
+  entity = n: _testHashIdentity "entity" [ "name" ] (_: n);
+
   supply = bindings: {
     inherit bindings;
     proposals = { };
-    origins = { };
+    origins = builtins.mapAttrs (_: _: "fixture") bindings;
+    valueIdentities = builtins.mapAttrs (n: _: entity n) bindings;
   };
 
   reg = bindings: x.registerSupply (supply bindings);

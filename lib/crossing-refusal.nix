@@ -149,6 +149,7 @@ in
     # merge
     duplicateExport = "duplicate-export";
     mergeIncompatibility = "merge-incompatibility";
+    crossingOriginConflict = "crossing-origin-conflict";
 
     # close
     substrateDemandInexact = "substrate-placement-inexact-demand";

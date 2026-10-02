@@ -248,8 +248,27 @@ let
         "bindings"
         "proposals"
         "origins"
+        "valueIdentities"
       ];
       names = builtins.attrNames (supply.bindings or { });
+      # Two per-binding maps are TOTAL over `bindings`, each entry a string: `origins`, the
+      # declaration site `merge` decides sameness by, and `valueIdentities`, the node each
+      # binding's value is, which the binding node's identity carries. A missing origin would
+      # reach `merge` as `null == null`; a missing value identity would mint alice's binding and
+      # bob's as one node.
+      partial =
+        builtins.concatMap
+          (
+            f:
+            builtins.map (n: {
+              field = f;
+              name = n;
+            }) (builtins.filter (n: !builtins.isString (supply.${f}.${n} or null)) names)
+          )
+          [
+            "origins"
+            "valueIdentities"
+          ];
       checks = builtins.map (n: bindingLib.checkBinding supply.bindings.${n}) names;
       badBinding = refusalLib.firstRefusal checks;
       termChecks = builtins.map (n: termLib.checkTerm supply.bindings.${n}.term) (
@@ -264,6 +283,16 @@ let
         witness = {
           object = "Supply";
           fields = missing;
+        };
+      }
+    else if partial != [ ] then
+      refuse {
+        code = codes.declarationMissingField;
+        blamed = party.supplier;
+        witness = {
+          object = "Supply";
+          entries = partial;
+          expected = "string";
         };
       }
     else if badBinding != null then
