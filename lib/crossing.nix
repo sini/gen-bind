@@ -34,15 +34,19 @@
 # `merge` and a gate's branch union collapse them iff declared at one site and
 # otherwise refuse by name (ADR-0034's bme8i rider, amended 2026-09-30;
 # specs/2026-10-02-gen-bind-relata-identity-origin-merge-spec.md §2.3).
-{ prelude, graph }:
+{
+  prelude,
+  graph,
+  algebra,
+}:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
-  termLib = import ./crossing-term.nix { inherit prelude; };
+  termLib = import ./crossing-term.nix { inherit prelude algebra; };
   bindingLib = import ./crossing-binding.nix { inherit prelude; };
-  deltaLib = import ./crossing-delta.nix { inherit prelude; };
+  deltaLib = import ./crossing-delta.nix { inherit prelude algebra; };
   contractLib = import ./crossing-contract.nix { inherit prelude; };
   adapterLib = import ./crossing-adapter.nix { inherit prelude; };
-  linksetLib = import ./crossing-linkset.nix { inherit prelude; };
+  linksetLib = import ./crossing-linkset.nix { inherit prelude algebra; };
 
   # The concrete adapters — ADR-0031 F2's destination for gen-flake's
   # `inject.nix` and `terminals.nix`. `crossing-adapter.nix` defines the Adapter

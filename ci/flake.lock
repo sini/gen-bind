@@ -161,6 +161,21 @@
     },
     "gen-algebra": {
       "locked": {
+        "lastModified": 1790925189,
+        "narHash": "sha256-3kq9rEEaIh1FO2ydsfpwTGQhRrAHDV5BAAtEzdTq2Pw=",
+        "owner": "sini",
+        "repo": "gen-algebra",
+        "rev": "18238b1c08d943dd7288b09e40c0b1d865e66d9d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-algebra",
+        "type": "github"
+      }
+    },
+    "gen-algebra_2": {
+      "locked": {
         "lastModified": 1790902148,
         "narHash": "sha256-vT2Zp60Y01Ky/+ZQvCsmkIOHlqfdNN4NJjc3icGdYko=",
         "owner": "sini",
@@ -174,7 +189,7 @@
         "type": "github"
       }
     },
-    "gen-algebra_2": {
+    "gen-algebra_3": {
       "locked": {
         "lastModified": 1790902148,
         "narHash": "sha256-vT2Zp60Y01Ky/+ZQvCsmkIOHlqfdNN4NJjc3icGdYko=",
@@ -212,7 +227,7 @@
     },
     "gen-delivery": {
       "inputs": {
-        "gen-algebra": "gen-algebra",
+        "gen-algebra": "gen-algebra_2",
         "gen-aspects": "gen-aspects",
         "gen-prelude": "gen-prelude_15"
       },
@@ -821,7 +836,7 @@
     },
     "gen-schema": {
       "inputs": {
-        "gen-algebra": "gen-algebra_2",
+        "gen-algebra": "gen-algebra_3",
         "gen-graph": "gen-graph_3",
         "gen-identity": "gen-identity_4",
         "gen-merge": "gen-merge_2",
@@ -1401,6 +1416,7 @@
     },
     "root": {
       "inputs": {
+        "gen-algebra": "gen-algebra",
         "gen-delivery": "gen-delivery",
         "gen-graph": "gen-graph_6",
         "gen-harness": "gen-harness",

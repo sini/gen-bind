@@ -16,8 +16,11 @@
     # flake inputs (its `flake.nix` publishes `lib = import ./.;`, UNAPPLIED); its
     # own `algebra`/`aspects` formals resolve via ITS OWN `ci/flake.lock`-pinned
     # fetch when called with `{ }`, so this one input pulls in no further gen-bind
-    # input — `gen-bind` gains no edge onto gen-algebra or gen-aspects.
+    # input — `gen-bind` gains no edge onto gen-aspects through it.
     gen-delivery.url = "github:sini/gen-delivery";
+    # gen-algebra is the LIBRARY's own dependency (its term algebra, den-hoag-lwbb1 unit 1), passed
+    # to `../lib` below as `algebra`; it declares no inputs, so there is nothing to `follows`.
+    gen-algebra.url = "github:sini/gen-algebra";
     # ★★ gen-view IS ALSO A TEST DEPENDENCY ONLY — O-6's oracle (spec §3) reads
     # `gen-view/lib/carrier.nix`'s own `elementOf`, "a tag, not an attribute-name
     # match", so the check that the peer relation is a genuine tagged carrier
@@ -29,7 +32,7 @@
     gen-view.url = "github:sini/gen-view";
     # nixpkgs is the CI runner's dependency (test harness, treefmt) and supplies the
     # REAL `lib.evalModules` the equivalence gate drives gen-bind output through. The
-    # library itself (../lib) takes gen-prelude and gen-graph — see the purity
+    # library itself (../lib) takes gen-prelude, gen-graph and gen-algebra — see the purity
     # remediation and specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1.
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
   };
@@ -41,12 +44,14 @@
       gen-graph,
       gen-delivery,
       gen-view,
+      gen-algebra,
       ...
     }:
     let
       prelude = import "${gen-prelude}/lib";
       graph = import "${gen-graph}/lib" { inherit prelude; };
-      genBind = import ../lib { inherit prelude graph; };
+      algebra = import "${gen-algebra}/lib";
+      genBind = import ../lib { inherit prelude graph algebra; };
       # Called with `{ }`: gen-delivery resolves its own `algebra`/`aspects`
       # through its own standalone entry's `ci/flake.lock`-pinned defaults — the
       # same channel `genBind`'s own standalone shim uses for `prelude`/`graph`.
@@ -66,6 +71,7 @@
           genBind
           prelude
           graph
+          algebra
           genDelivery
           genViewCarrier
           ;

@@ -118,6 +118,9 @@ in
 
     # declare
     termVocabulary = "term-vocabulary";
+    # gen-algebra's term algebra (den-hoag-lwbb1 unit 1): a function child of `attrs` outside a
+    # module slot, of which this instance declares none.
+    termFunction = "term-function";
     contractVocabulary = "contract-vocabulary";
     higherOrderContract = "higher-order-contract";
     mergePolicyVocabulary = "merge-policy-vocabulary";
@@ -130,6 +133,7 @@ in
     litPayloadDerivation = "lit-payload-derivation";
     litPayloadBudget = "lit-payload-budget";
     litPayloadThrows = "lit-payload-throws";
+    refNotIdentifier = "ref-not-identifier"; # gen-algebra term algebra: `ref` takes an identifier
     emptyRelationKind = "empty-relation-kind";
     relatumNotReference = "relatum-not-reference"; # TAKEN-DEFAULT
 
@@ -145,6 +149,7 @@ in
     pathJoinOperand = "pathjoin-operand";
     formerOperandType = "former-operand-type"; # TAKEN-DEFAULT
     projectionPathMissing = "projection-path-missing"; # TAKEN-DEFAULT
+    refUnresolved = "ref-unresolved"; # gen-algebra term algebra: this instance's environment has no door
 
     # merge
     duplicateExport = "duplicate-export";

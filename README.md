@@ -6,7 +6,7 @@ Module binding with external arguments for Nix — partial application of bindin
 
 gen-bind gives you what manual `specialArgs` doesn't: `builtins.functionArgs` introspection to inject only the args a module actually declares, merge strategy control when bindings collide with module-system args, contract assertions that fire on demand rather than at wrap time, and provenance tracking that names the source in every error message.
 
-gen-bind is a **nixpkgs-lib-free Class B** library: its only dependency is [gen-prelude](https://github.com/sini/gen-prelude) (pure, zero-input). It remains module-system-*aware* — not -*dependent* — emitting modules in the nixpkgs `__functionArgs`/`_file`/`key` convention via two helpers vendored locally in `lib/module-convention.nix`, with no `nixpkgs.lib` import. A CI `purity` invariant and an `evalModules` equivalence test keep that boundary honest.
+gen-bind is a **nixpkgs-lib-free Class B** library: its dependencies are [gen-prelude](https://github.com/sini/gen-prelude), [gen-graph](https://github.com/sini/gen-graph) and [gen-algebra](https://github.com/sini/gen-algebra) (all pure; gen-algebra supplies the first-order term algebra crossing bodies are built in). It remains module-system-*aware* — not -*dependent* — emitting modules in the nixpkgs `__functionArgs`/`_file`/`key` convention via two helpers vendored locally in `lib/module-convention.nix`, with no `nixpkgs.lib` import. A CI `purity` invariant and an `evalModules` equivalence test keep that boundary honest.
 
 ## Table of Contents
 
@@ -77,7 +77,7 @@ module does not demand, so unbuilt hosts carry zero binding cost.
 | Library                                              | Role                                                                                                                   |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | [gen-prelude](https://github.com/sini/gen-prelude)   | Pure nixpkgs-lib-free utility base (builtins re-exports + vendored lib utils)                                          |
-| [gen-algebra](https://github.com/sini/gen-algebra)   | Pure primitives (record, either, intensional identity)                                                                 |
+| [gen-algebra](https://github.com/sini/gen-algebra)   | Pure primitives (record, either, intensional identity, the first-order term algebra)                                   |
 | [gen-types](https://github.com/sini/gen-types)       | Clean-room MIT structural type checker (leaf/poly checkers; `verify: v → null\|err`)                                   |
 | [gen-merge](https://github.com/sini/gen-merge)       | Byte-mode module merge engine (`evalModuleTree`, byte-identical to nixpkgs `lib.evalModules` over the priority subset) |
 | [gen-schema](https://github.com/sini/gen-schema)     | Typed registries (kinds, instances, collections, refs); re-hosted on gen-merge                                         |
@@ -98,14 +98,14 @@ module does not demand, so unbuilt hosts carry zero binding cost.
 # flake.nix
 {
   inputs.gen-bind.url = "github:sini/gen-bind";
-  # gen-bind's only dependency is gen-prelude (pulled in transitively, zero-input).
+  # gen-bind's dependencies (gen-prelude, gen-graph, gen-algebra) are pulled in transitively.
   # nixpkgs below is the consumer's own dependency, not gen-bind's.
 
   outputs = { gen-bind, ... }:
     let
       genBind = gen-bind.lib;
-      # or instantiate the lib directly (needs a gen-prelude input):
-      #   genBind = import "${gen-bind}/lib" { prelude = inputs.gen-prelude.lib; };
+      # or instantiate the lib directly (needs gen-prelude, gen-graph and gen-algebra inputs):
+      #   genBind = import "${gen-bind}/lib" { prelude = inputs.gen-prelude.lib; graph = inputs.gen-graph.lib; algebra = inputs.gen-algebra.lib; };
     in {
       # Wrap a module with external bindings
       wrappedModule = (genBind.wrap {
@@ -121,8 +121,8 @@ module does not demand, so unbuilt hosts carry zero binding cost.
 
 ```nix
 let
-  # prelude = gen-prelude's lib, e.g. import "${gen-prelude}/lib"
-  genBind = import ./path/to/gen-bind/lib { inherit prelude; };
+  # prelude, graph, algebra = gen-prelude's, gen-graph's and gen-algebra's lib
+  genBind = import ./path/to/gen-bind/lib { inherit prelude graph algebra; };
   result = genBind.wrap {
     bindings = { host = { name = "igloo"; }; };
     # pkgs comes from evalModules specialArgs — wrap only injects `host`
@@ -138,7 +138,9 @@ in result.module  # function: { pkgs, config, ... } -> { ... }
 ```nix
 let
   prelude = import ./path/to/gen-prelude/lib { };
-  genBind = import ./path/to/gen-bind/lib { inherit prelude; };
+  graph = import ./path/to/gen-graph/lib { inherit prelude; };
+  algebra = import ./path/to/gen-algebra/lib;
+  genBind = import ./path/to/gen-bind/lib { inherit prelude graph algebra; };
 in
 # use genBind.wrap, genBind.wrapAll, genBind.contract, etc.
 ```
