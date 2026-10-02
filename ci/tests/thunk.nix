@@ -6,6 +6,49 @@ let
     isThunk
     resolveThunks
     ;
+
+  onHost = { host, config, ... }: host;
+  resolveOne =
+    t:
+    (resolveThunks { } {
+      config = { };
+      ctx.host = "h";
+      thunkArgNames = [ "t" ];
+      bindings.t = [ t ];
+    }).t;
+  refused = v: !(builtins.tryEval (builtins.deepSeq v v)).success;
+  # nixpkgs' `lib.isFunction` reads none of these as a function.
+  outOfDomain = [
+    5
+    "s"
+    { a = 1; }
+    { __functor = 5; }
+    {
+      __functor = 5;
+      __functionArgs.config = false;
+    }
+    { __functor = _: 5; }
+    { __functor = _: { __functor = _: onHost; }; }
+    { __functor.__functor = _: _: onHost; }
+  ];
+  # nixpkgs' `lib.isFunction` reads both as a function, but `functionArgs` returns the published
+  # map verbatim, and neither is the attrset of booleans `setFunctionArgs` publishes.
+  malformedMap = [
+    {
+      __functor = _: a: a.host;
+      __functionArgs = [
+        "host"
+        "config"
+      ];
+    }
+    {
+      __functor = _: a: a.host;
+      __functionArgs = {
+        host = "required";
+        config = false;
+      };
+    }
+  ];
 in
 {
 
@@ -291,6 +334,145 @@ in
       success = true;
       value = {
         data = [ "igloo" ];
+      };
+    };
+  };
+
+  # ══ A FUNCTOR `fn` IS SERVED AS ITS LAMBDA TWIN (den-hoag-pcfmm) ═══════════
+  #
+  # WHAT A FAILING RUN LOOKS LIKE: the runner aborts UNCATCHABLY on the first functor with Nix's
+  # `'functionArgs' requires a function`, and no cell in this file reports. `published` reads `host`
+  # from `__functionArgs` alone (its lambda has no formals), so a reader that ignores the published
+  # map serves it `config` only and it throws on `a.host`.
+  flake.tests.thunk.test-a-functor-fn-is-served-as-its-lambda-twin = {
+    expr = map (fn: resolveOne (mkThunk fn)) [
+      onHost
+      { __functor = _: onHost; }
+      (lib.setFunctionArgs (a: a.host) {
+        host = false;
+        config = false;
+      })
+    ];
+    expected = [
+      [ "h" ]
+      [ "h" ]
+      [ "h" ]
+    ];
+  };
+
+  # Outside `functionArgs`' domain, at both doors: `mkThunk` and a marker built by hand.
+  flake.tests.thunk.test-an-fn-outside-the-reader-domain-is-refused-catchably = {
+    expr = map (fn: {
+      mk = refused (mkThunk fn);
+      raw = refused (resolveOne {
+        __configThunk = true;
+        __fn = fn;
+      });
+    }) outOfDomain;
+    expected = map (_: {
+      mk = true;
+      raw = true;
+    }) outOfDomain;
+  };
+
+  flake.tests.thunk.test-a-malformed-published-map-is-refused-catchably = {
+    expr = map (fn: {
+      mk = refused (mkThunk fn);
+      raw = refused (resolveOne {
+        __configThunk = true;
+        __fn = fn;
+      });
+    }) malformedMap;
+    expected = map (_: {
+      mk = true;
+      raw = true;
+    }) malformedMap;
+  };
+
+  # The door is at intake, so a route that never resolves the marker refuses it too, once forced:
+  # a marker's only meaning is that it resolves (Findler–Felleisen blame at the supplier's call).
+  # A non-list binding is passed through, and here it is refused rather than carried.
+  flake.tests.thunk.test-an-out-of-domain-fn-is-refused-on-the-passthrough-route = {
+    expr =
+      refused
+        (resolveThunks { } {
+          config = { };
+          ctx = { };
+          thunkArgNames = [ "p" ];
+          bindings.p = mkThunk { __functor = _: { __functor = _: onHost; }; };
+        }).p;
+    expected = true;
+  };
+
+  flake.tests.thunk.test-a-required-formal-ctx-does-not-supply-is-refused-catchably = {
+    expr = refused (resolveOne (mkThunk ({ missing, config }: missing)));
+    expected = true;
+  };
+
+  flake.testsError.thunk = {
+    test-mkThunk-refuses-a-functor-yielding-no-function-by-name = {
+      expr = mkThunk { __functor = 5; };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]mkThunk: `fn` must be a function, or a functor whose `__functor` yields one, not a functor that does not yield a function$";
+      };
+    };
+    test-mkThunkFrom-refuses-a-non-function-by-name = {
+      expr = mkThunkFrom "s" "s";
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]mkThunkFrom: `fn` must be a function, or a functor whose `__functor` yields one, not a string$";
+      };
+    };
+    test-resolveThunks-refuses-a-hand-built-marker-by-name = {
+      expr = resolveOne {
+        __configThunk = true;
+        __fn = 5;
+      };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]resolveThunks: `fn` must be a function, or a functor whose `__functor` yields one, not a int$";
+      };
+    };
+    test-mkThunk-refuses-a-published-map-that-is-a-list-by-name = {
+      expr = mkThunk (builtins.head malformedMap);
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]mkThunk: `fn`'s published `__functionArgs` must be an attrset of booleans, not a list$";
+      };
+    };
+    test-resolveThunks-refuses-a-published-map-with-a-non-boolean-by-name = {
+      expr = resolveOne {
+        __configThunk = true;
+        __fn = builtins.elemAt malformedMap 1;
+      };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]resolveThunks: `fn`'s published `__functionArgs` must be an attrset of booleans, not one whose 'host' is a string$";
+      };
+    };
+    test-resolveThunks-names-the-unmet-formal = {
+      expr = resolveOne (mkThunk ({ missing, config }: missing));
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]resolveThunks: a thunk in binding 't' requires 'missing', which ctx does not supply$";
+      };
+    };
+    # THE RESIDUE, NOT A DOOR: a published `__functionArgs` is the reader's whole answer (nixpkgs'
+    # `setFunctionArgs` convention), so a map that omits a formal its body requires cannot be seen
+    # before the application, which aborts inside it. Pinned so the bound is measured, not claimed.
+    test-resolveThunks-residue-a-published-map-omitting-a-required-formal-aborts = {
+      expr = resolveOne (
+        mkThunk (
+          lib.setFunctionArgs ({ host, missing, ... }: host) {
+            host = false;
+            config = false;
+          }
+        )
+      );
+      expectedError = {
+        type = "TypeError";
+        msg = "called without required argument 'missing'";
       };
     };
   };

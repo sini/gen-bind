@@ -5,10 +5,62 @@
 # and resolve inside the module wrapper when evalModules provides config.
 #
 # Academic: Reynolds 1972 §4 — deferred evaluation via closure inspection.
-# The thunk's __fn is a closure whose formal parameters (builtins.functionArgs)
-# determine which context args to inject alongside config.
+# The thunk's __fn is a closure, or a functor, whose formal parameters (nixpkgs'
+# functor-aware functionArgs) determine which context args to inject alongside config.
 { prelude }:
 let
+  # A thunk's `fn` is read with `functionArgs` before it is applied, so it must lie in that reader's
+  # domain: nixpkgs' functor-aware `isFunction` (c59305), inlined behind the builtin exactly as `wrap`
+  # reads a functor module (den-hoag-k5ohf), because the resolve site is on `wrap`'s thunk route. A
+  # functor is served exactly as its lambda twin. Anything outside the domain — a non-function, a
+  # functor whose `__functor` is not a function or does not yield one — is refused by name, catchably
+  # (ADR-0025 item 1), where Nix would abort. So is a functor whose published `__functionArgs` is not
+  # an attrset of booleans: `functionArgs` returns it verbatim, and reading it would abort.
+  describe =
+    v:
+    if builtins.isAttrs v && v ? __functor then
+      "functor that does not yield a function"
+    else
+      builtins.typeOf v;
+  describeMap =
+    m:
+    if builtins.isAttrs m then
+      let
+        k = builtins.head (builtins.filter (n: !builtins.isBool m.${n}) (builtins.attrNames m));
+      in
+      "one whose '${k}' is a ${builtins.typeOf m.${k}}"
+    else
+      "a ${builtins.typeOf m}";
+  checked =
+    door: fn:
+    if
+      !(
+        builtins.isFunction fn
+        || fn ? __functor && builtins.isFunction fn.__functor && builtins.isFunction (fn.__functor fn)
+      )
+    then
+      throw "gen-bind.${door}: `fn` must be a function, or a functor whose `__functor` yields one, not a ${describe fn}"
+    else if
+      fn ? __functionArgs
+      && !(
+        builtins.isAttrs fn.__functionArgs
+        && builtins.all builtins.isBool (builtins.attrValues fn.__functionArgs)
+      )
+    then
+      throw "gen-bind.${door}: `fn`'s published `__functionArgs` must be an attrset of booleans, not ${describeMap fn.__functionArgs}"
+    else
+      fn;
+  marker =
+    door: scope: fn:
+    let
+      f = checked door fn;
+    in
+    builtins.seq f {
+      __configThunk = true;
+      __fn = f;
+      __sourceScope = scope;
+    };
+
   # Resolve thunks within list-valued bindings.
   #
   # For each arg name in thunkArgNames whose binding value is a list,
@@ -79,7 +131,23 @@ let
           entry:
           if builtins.isAttrs entry && entry ? __configThunk then
             let
-              thunkArgs = builtins.functionArgs entry.__fn;
+              # A marker built by hand rather than by `mkThunk` meets the same door here; a lambda
+              # passes on the builtin alone.
+              fn = if builtins.isFunction entry.__fn then entry.__fn else checked "resolveThunks" entry.__fn;
+              # nixpkgs' `functionArgs` (c59305), inlined as `wrap` inlines it.
+              thunkArgs =
+                if fn ? __functor then
+                  fn.__functionArgs or (builtins.functionArgs (fn.__functor fn))
+                else
+                  builtins.functionArgs fn;
+              # A required formal neither `ctx` nor `config` supplies is decidable from `thunkArgs`
+              # before the application, which would otherwise abort uncatchably on it. A published
+              # map is authoritative, so one that claims a formal ctx lacks is refused even where the
+              # body would not read it.
+              unsupplied = builtins.removeAttrs thunkArgs (
+                [ "config" ] ++ builtins.attrNames (builtins.intersectAttrs thunkArgs ctx)
+              );
+              unmet = builtins.filter (ak: !unsupplied.${ak}) (builtins.attrNames unsupplied);
               ctxArgs = prelude.genAttrs (builtins.filter (ak: ctx ? ${ak}) (builtins.attrNames thunkArgs)) (
                 ak: ctx.${ak}
               );
@@ -94,7 +162,11 @@ let
                   producerConfigs.${sourceScope}
                 else
                   config;
-              result = entry.__fn (ctxArgs // { config = targetConfig; });
+              result =
+                if unmet != [ ] then
+                  throw "gen-bind.resolveThunks: a thunk in binding '${k}' requires '${builtins.head unmet}', which ctx does not supply"
+                else
+                  fn (ctxArgs // { config = targetConfig; });
             in
             if builtins.isList result then result else [ result ]
           else
@@ -124,17 +196,9 @@ in
 {
   inherit resolveThunks;
   cores.resolveThunks = resolveThunksCore;
-  mkThunk = fn: {
-    __configThunk = true;
-    __fn = fn;
-    __sourceScope = null;
-  };
+  mkThunk = marker "mkThunk" null;
 
-  mkThunkFrom = scopeId: fn: {
-    __configThunk = true;
-    __fn = fn;
-    __sourceScope = scopeId;
-  };
+  mkThunkFrom = marker "mkThunkFrom";
 
   isThunk = v: builtins.isAttrs v && v ? __configThunk;
 

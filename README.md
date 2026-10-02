@@ -555,6 +555,8 @@ mkThunk fn
 
 Creates a config-dependent thunk. `fn` receives `{ config; <ctx-args>... }` — `ctx-args` are any of `fn`'s named parameters that exist in the binding context. The return value is spliced into the list binding (single value or list both work).
 
+`fn` is read as nixpkgs' `lib.isFunction`/`lib.functionArgs` read a function: a lambda, or a functor whose `__functor` yields one, whose formals are its published `__functionArgs` if it has them (`lib.setFunctionArgs`), else those of `__functor fn`. A functor is served exactly as its lambda twin. Anything else is refused by name, catchably, when the thunk is forced: a non-function, a functor whose `__functor` is not a function or does not yield one (so a functor yielding a functor), and a functor whose published `__functionArgs` is not an attrset of booleans. The refusal is at intake, so a route that never resolves the thunk (a non-list binding, `isThunk`) refuses it too once it is forced.
+
 ### `mkThunkFrom`
 
 ```nix
@@ -578,6 +580,8 @@ resolveThunks { producerConfigs ? {}; } { config; ctx; thunkArgNames; bindings; 
 ```
 
 Resolves thunks within list-valued bindings. For each arg name in `thunkArgNames` whose binding is a list, expands thunk entries by calling `__fn` with `config` and matching `ctx` args. Non-thunk entries and non-list args pass through unchanged.
+
+A hand-built marker (`{ __configThunk = true; __fn; }`) meets the same `fn` refusal here. A formal `fn` requires (`false` in its formals) that is neither `config` nor in `ctx` is refused by name before the application (`a thunk in binding '<k>' requires '<arg>', which ctx does not supply`). A published `__functionArgs` is authoritative: one that claims a required formal `ctx` lacks is refused even if the body would not read it, and one that omits a formal the body requires cannot be seen before the application, which aborts inside it.
 
 `producerConfigs` (optional, default `{}`) is a `scopeKey → config` map for producer-scoped resolution: a thunk whose `__sourceScope` (from `mkThunkFrom`) is a key in the map resolves against `producerConfigs.<scope>` (the producer's config) instead of the consumer `config`. Default `{}` ⇒ every thunk resolves against the consumer `config` (byte-identical to the prior behavior); a `null`-scope thunk or an absent scope also falls back to the consumer `config`. See [Producer-scoped resolution](#producer-scoped-resolution).
 
