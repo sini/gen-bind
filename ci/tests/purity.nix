@@ -8,7 +8,7 @@
 # never "single dependency" — no cell here ever asserted the dependency COUNT or NAMED
 # gen-prelude as the sole one — it was always "no nixpkgs surface", which gen-graph
 # does not carry either, so the scan and its expectations below are unchanged by the
-# second input.
+# second input, nor by the third, gen-algebra (den-hoag-lwbb1 unit 1), which declares no inputs.
 #
 # Scope: lib/**.nix + the root flake.nix (the library + its flake). NOT ci/ — the
 # test harness legitimately uses nixpkgs.lib (including, here, to do this scan).

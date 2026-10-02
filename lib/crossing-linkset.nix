@@ -28,10 +28,10 @@
 # linkset is a statement about units; it can cost staticity, never admit an
 # inadmissible substrate placement. Every finer construct — the demand edge, the
 # crossing's relata, the congruence predicate — stays per BINDING.
-{ prelude }:
+{ prelude, algebra }:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
-  deltaLib = import ./crossing-delta.nix { inherit prelude; };
+  deltaLib = import ./crossing-delta.nix { inherit prelude algebra; };
   bindingLib = import ./crossing-binding.nix { inherit prelude; };
   inherit (refusalLib)
     ok

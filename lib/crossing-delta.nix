@@ -21,10 +21,10 @@
 # measured two valid disagreeing ones. There is exactly one assignment satisfying
 # the equation, and `max` over a set is order-free, so the assignment is
 # invariant under the presentation order of the bindings.
-{ prelude }:
+{ prelude, algebra }:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
-  termLib = import ./crossing-term.nix { inherit prelude; };
+  termLib = import ./crossing-term.nix { inherit prelude algebra; };
   bindingLib = import ./crossing-binding.nix { inherit prelude; };
 
   inherit (refusalLib)
@@ -149,6 +149,13 @@ let
       }
     else if t.__bodyTerm == "ReadCtx" then
       readCtxDelta sigma memo t.head
+    # `default h p d` reads sibling `h` and, when the path is absent inside it, `d`: the join of
+    # both, as `If` joins both arms.
+    else if t.__bodyTerm == "Default" then
+      joinAll [
+        (readCtxDelta sigma memo t.head)
+        (recurse t.fallback)
+      ]
     else if t.__bodyTerm == "Lit" then
       empty
     else

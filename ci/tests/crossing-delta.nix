@@ -196,6 +196,19 @@ in
     };
   };
 
+  # `default` reads its sibling as `readCtx` does (den-hoag-lwbb1 unit 1), so the demand carries.
+  flake.tests.crossing-delta.test-default-sibling-demand-propagates-it = {
+    expr =
+      (proj {
+        producer = termedB (t.readFrom "iceberg" [ "x" ]);
+        reader = termedB (t.default "producer" [ ] (t.lit 0));
+      }).reader;
+    expected = {
+      targets = [ "iceberg" ];
+      exact = "EXACT";
+    };
+  };
+
   flake.tests.crossing-delta.test-control-sibling-termed-without-readFrom-is-empty-and-exact = {
     expr =
       (proj {

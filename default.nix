@@ -1,6 +1,7 @@
 # Standalone (non-flake) entry. Flake consumers should use the `.lib` output.
 #
-# gen-bind is nixpkgs-lib-free (purity remediation): its two dependencies are gen-prelude and
+# gen-bind is nixpkgs-lib-free (purity remediation): its three dependencies are gen-prelude,
+# gen-algebra (the term algebra BodyTerm was extracted into, den-hoag-lwbb1 unit 1) and
 # gen-graph — the ADR-0026 boundary-mark mechanism the extent peer-read shape reuses rather than
 # reconstructs (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2.2, §4.1 Q1 Arm B).
 #
@@ -79,6 +80,7 @@ in
     import ./lib deps,
   prelude ? inputs.gen-prelude or (dep [ "gen-prelude" ]),
   graph ? inputs.gen-graph or (dep [ "gen-graph" ]),
+  algebra ? inputs.gen-algebra or (dep [ "gen-algebra" ]),
 }:
 # THE BODY IS EAGER, AND THAT IS WHAT MAKES THE ENTRY CELL TOTAL RATHER THAN PARTIAL. `forced` forces
 # every wired dependency to WHNF before `./lib` sees it, so a default that cannot resolve is loud AT
@@ -87,7 +89,7 @@ in
 # THE FORCE STOPS AT WHNF DELIBERATELY: `builtins.seq` of an attrset does not force its members, so
 # this reaches the dependency's root VALUE and never a member of it.
 let
-  deps = { inherit prelude graph; };
+  deps = { inherit prelude graph algebra; };
   forced = builtins.deepSeq (builtins.mapAttrs (_: builtins.typeOf) deps) null;
 in
 builtins.seq forced (wire {

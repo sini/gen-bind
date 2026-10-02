@@ -153,7 +153,126 @@ in
       "Concat"
       "PathJoin"
       "Apply"
+      "Default"
+      "Ref"
+      "Not"
     ];
+  };
+
+  # ── den-hoag-lwbb1 unit 1: the instance of gen-algebra's term algebra. Two shape errors that
+  #    aborted uncatchably are refusals by name now, and `default` reads a sibling or falls back.
+  flake.tests.crossing-term.test-apply-refuses-a-non-string-primitive = {
+    expr = codeOf (t.apply (_: 1) [ ]);
+    expected = "former-operand-type";
+  };
+
+  flake.tests.crossing-term.test-readFrom-refuses-a-function-target = {
+    expr = codeOf (t.readFrom (_: 1) [ ]);
+    expected = "former-operand-type";
+  };
+
+  # The one carried row whose code moved: BodyTerm refused a function child of `attrs` as
+  # `term-vocabulary { node = "lambda"; vocabulary; }`; the core names it `term-function`, and its
+  # witness names the key and the remedy. A non-term scalar child's witness gains `key`.
+  flake.tests.crossing-term.test-attrs-function-child-is-term-function = {
+    expr =
+      let
+        r = (x.checkTerm (t.attrs { a = y: y; })).refusal;
+      in
+      {
+        inherit (r) code blamed;
+        inherit (r.witness) key;
+        fields = builtins.attrNames r.witness;
+      };
+    expected = {
+      code = "term-function";
+      blamed = "supplier";
+      key = "a";
+      fields = [
+        "key"
+        "remedy"
+      ];
+    };
+  };
+
+  flake.tests.crossing-term.test-attrs-scalar-child-witness-names-the-key = {
+    expr = (x.checkTerm (t.attrs { a = 1; })).refusal.witness;
+    expected = {
+      key = "a";
+      node = "int";
+      vocabulary = x.knownFormers;
+    };
+  };
+
+  # Every code the term surface can reach is a row of the register. The `codes` half pins that each
+  # input really refuses with the code it is here for, so the register half cannot pass vacuously.
+  flake.tests.crossing-term.test-every-reachable-term-code-is-registered =
+    let
+      env = {
+        targets = { };
+        siblings.s = { };
+      };
+      reached = map codeOf [
+        (t.lit (_: 1))
+        (t.lit { type = "derivation"; })
+        (t.lit { a = throw "boom"; })
+        (t.lit (deep 40))
+        (x.checkTerm (t.attrs { a = y: y; }))
+        (x.checkTerm (t.attrs { a = 1; }))
+        (t.apply (_: 1) [ ])
+        (resolve (t.concat [ (t.lit /tmp) ]))
+        (resolve (t.pathJoin (t.lit "s") [ ]))
+        (resolve (t.apply "length" [ ]))
+        (resolve (
+          t.apply "elemAt" [
+            (t.list [ ])
+            (t.lit 0)
+          ]
+        ))
+        (x.resolveTerm env (t.readCtx "s" [ "a" ]))
+        (resolve (t.readFrom "t" [ ]))
+        (resolve (t.readCtx "absent" [ ]))
+        (t.ref 1)
+        (resolve (t.ref "r"))
+      ];
+    in
+    {
+      expr = {
+        codes = reached;
+        unregistered = builtins.filter (c: !(builtins.elem c (builtins.attrValues x.codes))) reached;
+      };
+      expected = {
+        codes = [
+          "lit-payload-function"
+          "lit-payload-derivation"
+          "lit-payload-throws"
+          "lit-payload-budget"
+          "term-function"
+          "term-vocabulary"
+          "former-operand-type"
+          "path-operand-store-copying-former"
+          "pathjoin-operand"
+          "apply-arity-or-type"
+          "apply-domain"
+          "projection-path-missing"
+          "readfrom-names-non-member"
+          "readctx-unresolvable-sibling"
+          "ref-not-identifier"
+          "ref-unresolved"
+        ];
+        unregistered = [ ];
+      };
+    };
+
+  flake.tests.crossing-term.test-default-falls-back-on-a-missing-path = {
+    expr = x.resolveTerm {
+      targets = { };
+      siblings.s = { };
+    } (t.default "s" [ "a" ] (t.lit 2));
+    expected = {
+      __crossingResult = "ok";
+      value = 2;
+    };
   };
 
   flake.tests.crossing-term.test-prim-vocabulary-is-closed = {

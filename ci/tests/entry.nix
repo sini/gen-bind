@@ -3,8 +3,8 @@
 # with `import ../lib` from ci's own inputs and so never evaluates the root shim. This is the cell
 # that does — the L1 migration replaced this file's PREDECESSOR (the pre-arm-B shape, which compared
 # a standalone `import ../.. { inherit prelude; }` against `genBind`'s `attrNames` and asserted
-# totality over that same two-key argument set) with the resolver-seam shape below: TWO dependencies
-# now, `prelude` and `graph` (the extent peer-read shape,
+# totality over that same two-key argument set) with the resolver-seam shape below: THREE dependencies
+# now, `prelude`, `graph` and `algebra` (gen-algebra's term algebra, den-hoag-lwbb1 unit 1; `graph` is the extent peer-read shape,
 # specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1 Q1 Arm B: "gen-bind acquires
 # gen-graph, ending its one-input shape") — both wired the same three-channel way every other
 # library in this roster now is.
@@ -33,6 +33,7 @@
   genBind,
   prelude,
   graph,
+  algebra,
   lib,
   ...
 }:
@@ -56,7 +57,7 @@ let
   # TWO PREDICATES, and the totality cell would then be comparing the shim against a copy nothing
   # applies.
   entryArgs = {
-    inherit prelude graph;
+    inherit prelude graph algebra;
     # The shim's own plumbing, which this cell is now obliged to CHOOSE rather than inherit. The
     # `throw` is what makes non-hermeticity IMPOSSIBLE for this application rather than merely
     # detected — but it is NOT the guard: a shim carrying `...` would swallow these keys unread and
