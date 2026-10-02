@@ -365,6 +365,7 @@ in
       "name"
       "origin"
       "record"
+      "site"
       "staticityAdmissible"
       "target"
     ];

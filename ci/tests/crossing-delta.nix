@@ -465,6 +465,7 @@ in
         bindings = { };
         proposals = { };
         origins = { };
+        valueIdentities = { };
       }
     );
     expected = true;

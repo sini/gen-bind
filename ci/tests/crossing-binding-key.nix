@@ -1,9 +1,8 @@
-# den-hoag-bme8i (B1) clause 1: the BINDING relatum is the binding's KEY, minted through the one
-# authority at REGISTRATION, one pass before the `link` that relates it (ADR-0034's bme8i rider;
-# ADR-0016 r7; specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.1, §3a).
-#
-# Clause 2 (two bindings under one key refusing where they meet) waits on its predicate's reading,
-# so no cell here asserts what `merge` does with a shared key.
+# den-hoag-bme8i (B1) clause 1: the BINDING relatum is the binding's KEY together with its VALUE's
+# identity (amended 2026-09-30, Q1a), minted through the one authority at REGISTRATION, one pass
+# before the `link` that relates it (ADR-0034's bme8i rider; ADR-0016 r7;
+# specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.1, §3a). What `merge` does with a
+# shared crossing id is asserted in crossing-binding-origin.nix.
 { genBind, ... }:
 let
   f = import ./_crossing-fixtures.nix { inherit genBind; };
@@ -14,6 +13,7 @@ let
     reg
     supply
     wrappedB
+    entity
     _testHashIdentity
     ;
   c = x.contractTerm;
@@ -28,7 +28,10 @@ in
   flake.tests.crossing-binding-key.test-bme8i-binding-relatum-is-the-minted-key = {
     expr = [
       (node.binding == "db")
-      (node.binding == _testHashIdentity "binding" [ "key" ] (_: "db"))
+      (
+        node.binding
+        == _testHashIdentity "binding" [ "key" "value" ] (l: if l == "key" then "db" else entity "db")
+      )
     ];
     expected = [
       false

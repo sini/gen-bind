@@ -28,11 +28,12 @@
 # ★ CONTENT-INDEPENDENCE. Two emitters presenting the same relata under
 # different label orders mint ONE crossing; order-insensitivity holds AT THE
 # ENCODING and no caller owes a sort. Refusal at minting is foreclosed: the
-# binding relatum is the binding's KEY, so the body enters no mint, and bindings
-# under distinct keys never share a crossing. Two bindings under ONE key meet only
-# at content merge, where refusal stays available (ADR-0034's bme8i rider;
-# specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.2); `merge` keeps
-# the right operand's node for a shared crossing id.
+# binding relatum is the binding's KEY together with its VALUE's node identity, so
+# the body enters no mint, and bindings under distinct keys or values never share a
+# crossing. Two bindings under one crossing id meet only at content merge, where
+# `merge` and a gate's branch union collapse them iff declared at one site and
+# otherwise refuse by name (ADR-0034's bme8i rider, amended 2026-09-30;
+# specs/2026-10-02-gen-bind-relata-identity-origin-merge-spec.md §2.3).
 { prelude, graph }:
 let
   refusalLib = import ./crossing-refusal.nix { inherit prelude; };
@@ -295,12 +296,18 @@ let
   # ── registration ─────────────────────────────────────────────────────────────
   # The BINDING NODE is fixed here (§2.1: "the binding node at emission"), one
   # pass before the `link` that relates it (ADR-0016 r7). Its identity is its KEY,
-  # the binding's name within its supply, and the key alone: the body is sealed,
-  # and a constructor tag, producer, mark or `origin` in the preimage would give
-  # one key two identities (ADR-0034's bme8i rider;
-  # specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.1). A key is an
-  # attribute name, so an absent one is inexpressible and nothing defaults it.
-  bindingIdentity = hashIdentity: key: hashIdentity "binding" [ "key" ] (_: key);
+  # the binding's name within its supply, together with its VALUE, the identity of
+  # the node the binding's value is (`valueIdentities`), so user=alice and user=bob
+  # are two bindings. The value enters as a REFERENCE to an already-minted node,
+  # never as content: the body is sealed, and a constructor tag, producer, mark or
+  # `origin` in the preimage would give one declaration two identities (ADR-0034's
+  # bme8i rider, amended 2026-09-30;
+  # specs/2026-10-02-gen-bind-relata-identity-origin-merge-spec.md §2.1). This file
+  # holds no node set, so a value identity that is not one is admitted SILENTLY, as
+  # the target relatum is; the door is the shared resolver's (den-hoag-7gp66).
+  bindingIdentity =
+    hashIdentity: key: value:
+    hashIdentity "binding" [ "key" "value" ] (l: if l == "key" then key else value);
 
   mkRegisterSupply =
     hashIdentity: supply:
@@ -309,7 +316,9 @@ let
       ok (
         r
         // {
-          bindingIdentities = builtins.mapAttrs (n: _: bindingIdentity hashIdentity n) supply.bindings;
+          bindingIdentities = builtins.mapAttrs (
+            n: _: bindingIdentity hashIdentity n supply.valueIdentities.${n}
+          ) supply.bindings;
         }
       )
     );
@@ -339,6 +348,50 @@ let
   # contracts now being first-order data, so the refusal is no longer
   # conservative-by-necessity.
   differingFields = a: b: builtins.filter (f: a.${f} != b.${f}) importCompareFields;
+
+  # Two operands holding one crossing id hold the SAME binding iff they were declared at the same
+  # site: the supplier's `origin` and the source position of the binding's attribute, which
+  # separates two declarations in one file. Neither reads the sealed body. A pair declared apart
+  # is refused by name; one declared once and reached twice collapses. A pair whose sites are BOTH
+  # null (a `mapAttrs`-built `bindings` set carries no position) cannot show it was declared once,
+  # so it refuses too, as two null origins would: its price is that a positionless supply reached
+  # twice refuses.
+  #
+  # ★ OPEN with the owner (den-hoag-yqz1j): ONE site evaluated twice — a factory called with two
+  # bodies under one origin — shows every non-content witness an honest diamond shows, so it
+  # collapses and the right operand's body survives. Only a content comparison separates it.
+  nodeUnion =
+    na: nb:
+    let
+      conflicts = builtins.filter (
+        i:
+        na ? ${i}
+        && (
+          na.${i}.origin != nb.${i}.origin
+          || na.${i}.site != nb.${i}.site
+          || (na.${i}.site == null && nb.${i}.site == null)
+        )
+      ) (builtins.attrNames nb);
+    in
+    if conflicts != [ ] then
+      refuse {
+        code = codes.crossingOriginConflict;
+        blamed = party.declarers;
+        witness = builtins.map (i: {
+          crossing = i;
+          name = nb.${i}.name;
+          origins = [
+            na.${i}.origin
+            nb.${i}.origin
+          ];
+          sites = [
+            na.${i}.site
+            nb.${i}.site
+          ];
+        }) conflicts;
+      }
+    else
+      ok (na // nb);
 
   merge =
     fa: fb:
@@ -391,21 +444,24 @@ let
     else if overlap != [ ] then
       declarerRefusal codes.importExportOverlap { names = overlap; }
     else
-      ok (mkFragment {
-        signature = mergedSig;
-        declared = {
-          imports = fa.declared.imports // fb.declared.imports;
-          exports = fa.declared.exports // fb.declared.exports;
-        };
-        importIdentities = fa.importIdentities // fb.importIdentities;
-        bodies = fa.bodies ++ fb.bodies;
-        crossings = prelude.unique (fa.crossings ++ fb.crossings);
-        nodes = fa.nodes // fb.nodes;
-        edges = {
-          satisfiedBy = fa.edges.satisfiedBy // fb.edges.satisfiedBy;
-        };
-        gate = if fa.gate != null then fa.gate else fb.gate;
-      });
+      andThen (nodeUnion fa.nodes fb.nodes) (
+        nodes:
+        ok (mkFragment {
+          signature = mergedSig;
+          declared = {
+            imports = fa.declared.imports // fb.declared.imports;
+            exports = fa.declared.exports // fb.declared.exports;
+          };
+          importIdentities = fa.importIdentities // fb.importIdentities;
+          bodies = fa.bodies ++ fb.bodies;
+          crossings = prelude.unique (fa.crossings ++ fb.crossings);
+          inherit nodes;
+          edges = {
+            satisfiedBy = fa.edges.satisfiedBy // fb.edges.satisfiedBy;
+          };
+          gate = if fa.gate != null then fa.gate else fb.gate;
+        })
+      );
 
   # ── gate ─────────────────────────────────────────────────────────────────────
   # Jones's Trick applies "when a dynamic variable d is known to assume one of a
@@ -464,25 +520,28 @@ let
         andThen (unionAlternative "ExportDecl" exportCompareFields g.signature.exports f.signature.exports)
           (
             exports:
-            ok (
-              g
-              // {
-                signature = {
-                  imports = g.signature.imports // f.signature.imports;
-                  inherit exports;
-                };
-                declared = {
-                  imports = declaredImports;
-                  inherit exports;
-                };
-                importIdentities = g.importIdentities // f.importIdentities;
-                bodies = g.bodies ++ f.bodies;
-                crossings = prelude.unique (g.crossings ++ f.crossings);
-                nodes = g.nodes // f.nodes;
-                edges = {
-                  satisfiedBy = g.edges.satisfiedBy // f.edges.satisfiedBy;
-                };
-              }
+            andThen (nodeUnion g.nodes f.nodes) (
+              nodes:
+              ok (
+                g
+                // {
+                  signature = {
+                    imports = g.signature.imports // f.signature.imports;
+                    inherit exports;
+                  };
+                  declared = {
+                    imports = declaredImports;
+                    inherit exports;
+                  };
+                  importIdentities = g.importIdentities // f.importIdentities;
+                  bodies = g.bodies ++ f.bodies;
+                  crossings = prelude.unique (g.crossings ++ f.crossings);
+                  inherit nodes;
+                  edges = {
+                    satisfiedBy = g.edges.satisfiedBy // f.edges.satisfiedBy;
+                  };
+                }
+              )
             )
           )
       )
@@ -607,11 +666,14 @@ let
       # no node set, so it cannot tell a target node's identity from a name, and
       # a name is admitted SILENTLY; the door is the shared resolver's.
       #
-      # The BINDING relatum is the binding node's identity, minted from its key at
-      # registration (ADR-0034's bme8i rider;
-      # specs/2026-09-28-gen-bind-binding-key-identity-spec.md §2.1). The key is
-      # the import's name, which the import identity's preimage already carries,
-      # so a crossing is separated by its import and its target.
+      # The BINDING relatum is the binding node's identity, minted from its key and
+      # value at registration (ADR-0034's bme8i rider, amended 2026-09-30). The key
+      # is the import's name, which the import identity's preimage already carries,
+      # so a crossing is separated by its import, its value and its target.
+      #
+      # `origin` and `site` are the declaration site `nodeUnion` decides sameness by.
+      # `site` is the source position of the binding's attribute: DERIVED, it reads
+      # no value and forces nothing, and it is null for an attribute `mapAttrs` built.
       nodeFor =
         n:
         andThen
@@ -631,7 +693,8 @@ let
               staticityAdmissible = !(prelude.elem targetId (deltaLib.demands projection n));
               deltaExact = deltaLib.deltaExact projection n;
               record = bindings.${n};
-              origin = supply.origins.${n} or null;
+              origin = supply.origins.${n};
+              site = builtins.unsafeGetAttrPos n bindings;
             }
           );
 
