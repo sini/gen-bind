@@ -46,7 +46,17 @@ let
         ;
       provenance = o.provenance or { };
       vocabulary = o.vocabulary or null;
-      allArgs = if builtins.isFunction module then builtins.functionArgs module else { };
+      allArgs =
+        if builtins.isFunction module then
+          builtins.functionArgs module
+        else if
+          module ? __functor
+          && builtins.isFunction module.__functor
+          && builtins.isFunction (module.__functor module)
+        then
+          module.__functionArgs or (builtins.functionArgs (module.__functor module))
+        else
+          { };
       argNames = builtins.attrNames allArgs;
       boundArgNames = builtins.filter (k: bindings ? ${k}) argNames;
       fullVocabulary = if vocabulary == null then builtins.attrNames bindings else vocabulary;

@@ -11,7 +11,8 @@
 # convention to emit modules a real `evalModules` consumes, but owns the ~6 LOC rather
 # than importing `nixpkgs.lib`. Kept gen-bind-local: gen-prelude READS the convention
 # (its `functionArgs` / `isFunction` are nixpkgs' functor-aware readers, and its `door`
-# publishes `__functionArgs` from a field contract, den-hoag-7gp66 P2), but these two WRITERS
+# publishes `__functionArgs` from a field contract, den-hoag-7gp66 P2), and so do `wrap`,
+# `buildSignature` and `stripBindingArgs`, so gen-bind reads what it writes; but these two WRITERS
 # are the module convention's, and `_file` is the module system's alone. Production-safety is
 # gated by the evalModules equivalence suite (ci/tests/evalmodules-equivalence.nix).
 #

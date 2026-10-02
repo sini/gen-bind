@@ -169,9 +169,9 @@ When no binding names match the module's args, the module passes through unchang
 
 `wrap` handles three module shapes:
 
-- **Function** — standard `{ arg1, arg2, ... }: { ... }`. Bindings are injected via partial application.
+- **Function** — standard `{ arg1, arg2, ... }: { ... }`. Bindings are injected via partial application. A functor module (`__functor`, with or without `__functionArgs`) is a function too, read by nixpkgs' `lib.isFunction`/`lib.functionArgs`, so `wrap` binds into it, including into `wrap`'s own partial output.
 - **Imports attrset** — `{ imports = [ mod1 mod2 ]; }`. Each import is wrapped recursively.
-- **Plain attrset** — `{ config = { ... }; }`. Passes through unchanged.
+- **Plain attrset** — `{ config = { ... }; }`, including a functor whose `__functor` does not yield a function. Passes through unchanged.
 
 ### Merge Strategies
 
@@ -351,7 +351,7 @@ After wrapping, binding arg names must be removed from the module's advertised a
 stripped = genBind.stripBindingArgs [ "host" ] result.module;
 ```
 
-Works on both function modules and attrset modules with `__functionArgs`. Args not present in the module's advertised interface are silently skipped.
+Works on function modules, attrset modules with `__functionArgs`, and functor modules without them. Args not present in the module's advertised interface are silently skipped.
 
 ### Batch Wrapping
 
@@ -675,7 +675,7 @@ Stamps a stable NixOS module key onto a module. Non-anon: returns `{ key = "${cl
 stripBindingArgs bindingNames module
 ```
 
-Removes `bindingNames` from the module's advertised formal args. Works on function modules and attrset modules with `__functionArgs`. Returns the module unchanged if no args match or the module shape doesn't support stripping.
+Removes `bindingNames` from the module's advertised formal args. Works on function modules, attrset modules with `__functionArgs`, and functor modules without them. Returns the module unchanged if no args match or the module shape doesn't support stripping.
 
 ### `buildSignature`
 

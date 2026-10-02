@@ -103,7 +103,11 @@ let
         thunkBindings
         producerConfigs
         ;
-      moduleArgs = builtins.functionArgs module;
+      moduleArgs =
+        if module ? __functor then
+          module.__functionArgs or (builtins.functionArgs (module.__functor module))
+        else
+          builtins.functionArgs module;
       moduleArgNames = builtins.attrNames moduleArgs;
       boundArgNames = builtins.filter (k: bindings ? ${k}) moduleArgNames;
     in
@@ -330,7 +334,13 @@ let
         contracts = { };
       };
     in
-    if builtins.isFunction module then
+    if
+      builtins.isFunction module
+      ||
+        module ? __functor
+        && builtins.isFunction module.__functor
+        && builtins.isFunction (module.__functor module)
+    then
       wrapFunctionModule cfgWithContracted module
     else if builtins.isAttrs module && module ? imports && builtins.isList module.imports then
       wrapImportsModule cfgWithContracted module

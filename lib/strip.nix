@@ -20,10 +20,11 @@ in
   stripBindingArgs =
     bindingNames: module:
     let
-      isWrappedAttrset = builtins.isAttrs module && module ? __functionArgs;
+      isWrappedAttrset =
+        builtins.isAttrs module && (module ? __functionArgs || prelude.isFunction module);
       rawArgs =
         if isWrappedAttrset then
-          module.__functionArgs
+          module.__functionArgs or (prelude.functionArgs module)
         else if builtins.isFunction module then
           builtins.functionArgs module
         else
