@@ -1,4 +1,9 @@
-{ lib, genBind, ... }:
+{
+  lib,
+  genBind,
+  graph,
+  ...
+}:
 let
   inherit (genBind)
     wrap
@@ -11,6 +16,49 @@ let
   # Does forcing this value to normal form succeed? A contract that fires is a
   # `throw`, so `okD v == false` means "something forced a violating binding".
   okD = v: (builtins.tryEval (builtins.deepSeq v v)).success;
+
+  # THE POLICY DOOR (den-hoag-bvpuo) fixtures: `host` is bound and, in `called`, also supplied by the
+  # module system, so `"SYSTEM"` is the system-wins answer and `"BOUND"` the binding.
+  onHost = { host, config, ... }: { out = host; };
+  called =
+    opts:
+    ((wrap ({ bindings.host = "BOUND"; } // opts) onHost).module {
+      config = { };
+      host = "SYSTEM";
+    }).out;
+  annotated = s: {
+    bindings.host = {
+      _mergeStrategy = s;
+      v = "BOUND";
+    };
+  };
+  # the hosted terminal: the per-value annotation is the only policy spelling that reaches it
+  hosted =
+    value:
+    let
+      t = genBind.crossing.mkHostedTerminal {
+        evaluator = a: { config.built = a.modules; };
+        locateConfig = u: u.config;
+        class = "host";
+      };
+    in
+    (
+      (builtins.head (
+        (t.adapter {
+          extent = { };
+          extraModules = [ ];
+          peerGraph = graph.labeledFrom { peer = _: [ ]; } [ ];
+          marksOf = _: [ ];
+          readerId = "fixture";
+        }).bindFormals
+          { host = value; }
+          [ onHost ]
+      ))
+        {
+          config = { };
+          host = "SYSTEM";
+        }
+    ).out;
 in
 {
 
@@ -540,5 +588,200 @@ in
       in
       isThunk (builtins.head (r.module { config = { }; }).out);
     expected = true;
+  };
+
+  # THE POLICY DOOR (den-hoag-bvpuo): a merge strategy is one of the three declared values at every
+  # field a caller writes it, and anything else is refused by name, catchably. WHAT A FAILING RUN
+  # LOOKS LIKE: without the door every shape below binds `"BOUND"` (or serves the annotated value)
+  # and each `success` reads `true`.
+  flake.tests.wrap.test-policy-door-refuses-every-non-declared-value-catchably = {
+    expr = builtins.map (v: (builtins.tryEval (builtins.deepSeq v v)).success) [
+      (called { mergeStrategies.host = "sytem-wins"; })
+      (called { mergeStrategies.host = 5; })
+      (called { mergeStrategies.host = null; })
+      (called { mergeStrategies.host = { }; })
+      (called { mergeStrategies.host = [ "system-wins" ]; })
+      (called { mergeStrategies.host = x: x; })
+      (called { mergeStrategies = "system-wins"; })
+      (called { defaultMergeStrategy = "sytem-wins"; })
+      (called { defaultMergeStrategy = null; })
+      (called (annotated "sytem-wins"))
+      (called (annotated 5))
+      (
+        (builtins.head
+          (wrapAll {
+            bindings.host = "BOUND";
+            mergeStrategies.host = "sytem-wins";
+          } [ onHost ]).modules
+        )
+          {
+            config = { };
+            host = "SYSTEM";
+          }
+      ).out
+      (hosted {
+        _mergeStrategy = "sytem-wins";
+        v = "BOUND";
+      })
+    ];
+    expected = builtins.genList (_: false) 13;
+  };
+
+  # Every declared value behaves as before, at every field: a door that refused one would turn its
+  # answer into a refusal.
+  flake.tests.wrap.test-policy-door-every-declared-value-behaves-as-before = {
+    expr = [
+      (called { mergeStrategies.host = "bind-wins"; })
+      (called { mergeStrategies.host = "system-wins"; })
+      (called { mergeStrategies.host = "error"; })
+      (called { defaultMergeStrategy = "system-wins"; })
+      (called (annotated "system-wins"))
+      (hosted {
+        _mergeStrategy = "system-wins";
+        v = "BOUND";
+      })
+    ];
+    expected = [
+      "BOUND"
+      "SYSTEM"
+      "BOUND"
+      "SYSTEM"
+      "SYSTEM"
+      "SYSTEM"
+    ];
+  };
+
+  # The cfg-level fields are decoded with the door's keys, when `wrap opts` is formed: an entry for
+  # a name no formal binds, a typo the module never demands, and a bad default beside a per-key entry
+  # that wins are all refused. Binding values stay unforced.
+  flake.tests.wrap.test-policy-door-decodes-cfg-fields-when-wrap-opts-is-formed = {
+    expr = {
+      unknownKey =
+        (builtins.tryEval (builtins.seq (wrap { mergeStrategies.zz = "sytem-wins"; }) null)).success;
+      # `host` is bound and a formal, and the module never demands it: its policy is never read
+      notDemanded =
+        (builtins.tryEval (
+          builtins.deepSeq
+            (
+              (wrap {
+                bindings.host = "BOUND";
+                mergeStrategies.host = "sytem-wins";
+              } ({ host, config, ... }: { out = "IGNORED"; })).module
+                { config = { }; }
+            ).out
+            null
+        )).success;
+      shadowedDefault =
+        (builtins.tryEval (
+          builtins.seq (wrap {
+            mergeStrategies.host = "system-wins";
+            defaultMergeStrategy = "sytem-wins";
+          }) null
+        )).success;
+      valueUnforced = (wrap { bindings.host = throw "value-forced"; } onHost).wrapped;
+    };
+    expected = {
+      unknownKey = false;
+      notDemanded = false;
+      shadowedDefault = false;
+      valueUnforced = true;
+    };
+  };
+
+  # A value's own `_mergeStrategy` is decoded where it is read, never when `wrap opts` is formed:
+  # shadowed by a per-key entry it is not read, and on an arg the module never demands it is not read.
+  flake.tests.wrap.test-policy-door-reads-an-annotation-only-where-it-is-read = {
+    expr = {
+      shadowed = called ({ mergeStrategies.host = "system-wins"; } // annotated "sytem-wins");
+      notDemanded =
+        ((wrap (annotated "sytem-wins") ({ host, config, ... }: { out = "IGNORED"; })).module {
+          config = { };
+        }).out;
+    };
+    expected = {
+      shadowed = "SYSTEM";
+      notDemanded = "IGNORED";
+    };
+  };
+
+  flake.testsError.wrap = {
+    test-policy-door-names-a-misspelt-mergeStrategies-entry = {
+      expr = called { mergeStrategies.host = "sytem-wins"; };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]wrap: `mergeStrategies[.]host` is \"sytem-wins\", not one of \"bind-wins\", \"system-wins\", \"error\"$";
+      };
+    };
+    test-policy-door-names-a-non-string-default-by-type = {
+      expr = called { defaultMergeStrategy = null; };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]wrap: `defaultMergeStrategy` is a null, not one of \"bind-wins\", \"system-wins\", \"error\"$";
+      };
+    };
+    test-policy-door-names-a-non-attrset-mergeStrategies = {
+      expr = called { mergeStrategies = "system-wins"; };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]wrap: `mergeStrategies` must be an attrset of policies, not a string$";
+      };
+    };
+    test-policy-door-names-the-annotation-it-read = {
+      expr = called (annotated "sytem-wins");
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind: binding 'host' has `_mergeStrategy` \"sytem-wins\", not one of \"bind-wins\", \"system-wins\", \"error\"$";
+      };
+    };
+    test-policy-door-wrapAll-names-its-own-door = {
+      expr = wrapAll { mergeStrategies.host = "sytem-wins"; } [ onHost ];
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]wrapAll: `mergeStrategies[.]host` is \"sytem-wins\", not one of \"bind-wins\", \"system-wins\", \"error\"$";
+      };
+    };
+    test-policy-door-wrapAll-names-its-own-door-for-a-non-attrset = {
+      expr = wrapAll { mergeStrategies = "system-wins"; } [ onHost ];
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]wrapAll: `mergeStrategies` must be an attrset of policies, not a string$";
+      };
+    };
+    # The validator a wrap caller reaches names the field the caller wrote, not `resolvePolicy`.
+    test-policy-door-the-validator-route-names-the-wrap-field = {
+      expr =
+        (
+          (wrap {
+            bindings.host = "BOUND";
+            mergeStrategies.host = "sytem-wins";
+          } onHost).validator
+            {
+              config._module.args.host = "SYSTEM";
+            }
+        ).warnings;
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]wrap: `mergeStrategies[.]host` is \"sytem-wins\", not one of \"bind-wins\", \"system-wins\", \"error\"$";
+      };
+    };
+    test-policy-door-the-hosted-terminal-names-the-annotation = {
+      expr = hosted {
+        _mergeStrategy = "sytem-wins";
+        v = "BOUND";
+      };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind: binding 'host' has `_mergeStrategy` \"sytem-wins\", not one of \"bind-wins\", \"system-wins\", \"error\"$";
+      };
+    };
+    # RESIDUE: what a policy thunk itself throws reaches the caller unchanged; the door decodes a
+    # value, and a throw is not one.
+    test-policy-door-residue-a-throwing-policy-throws-its-own-message = {
+      expr = wrap { mergeStrategies.host = throw "policy-thrown"; };
+      expectedError = {
+        type = "ThrownError";
+        msg = "^policy-thrown$";
+      };
+    };
   };
 }

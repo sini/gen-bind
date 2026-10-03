@@ -172,9 +172,10 @@ in
     expected = [ ];
   };
 
-  # The wrap route: a misspelled `mergeStrategies` entry reaches the validator through gen-bind's own
-  # policy reader and is refused there, where it used to warn `bind-wins`.
-  flake.tests.merge-strategy.test-wrap-misspelled-strategy-is-refused-at-a-collision = {
+  # The wrap route: a misspelled `mergeStrategies` entry, which used to warn `bind-wins` at a
+  # collision, is refused. `wrap`'s door refuses it when `wrap opts` is formed (den-hoag-bvpuo), so
+  # it never reaches the validator.
+  flake.tests.merge-strategy.test-wrap-misspelled-strategy-is-refused = {
     expr =
       (builtins.tryEval (
         builtins.deepSeq

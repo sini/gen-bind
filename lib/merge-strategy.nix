@@ -16,6 +16,23 @@ let
   provenanceLib = import ./provenance.nix { inherit prelude; };
   applicable = import ./applicable.nix { };
 
+  # The declared policies are one closed set, and every reader of a policy decodes against it here
+  # (den-hoag-bvpuo): `decodePolicy refuse v` is `v` when declared, else a refusal, by name and
+  # catchably, whose subject `refuse` renders from the value it read — the field the caller wrote.
+  policyNames = [
+    "bind-wins"
+    "system-wins"
+    "error"
+  ];
+  decodePolicy =
+    refuse: v:
+    if builtins.elem v policyNames then
+      v
+    else
+      throw "${
+        refuse (if builtins.isString v then builtins.toJSON v else "a ${builtins.typeOf v}")
+      }, not one of ${builtins.concatStringsSep ", " (map builtins.toJSON policyNames)}";
+
   # ★★★ ADR-0023 (b) — POINTER DECLARATION, PARITY WITH `thunk.nix`'s. The full
   # four-part declaration for the crossing route this validator gets carried
   # into lives at gen-bind `crossing-adapter-set.nix`'s `mkHostedTerminal`
@@ -89,7 +106,11 @@ let
           name:
           let
             hasReal = (systemArg moduleArgs name).present;
-            strategy = resolvePolicy name;
+            # `resolvePolicy`'s codomain is the three declared policies: a result outside them is
+            # refused by name, where it is read, rather than read as `bind-wins` (den-hoag-d65u4).
+            strategy = decodePolicy (
+              shown: "gen-bind.mkMergeValidator: `resolvePolicy` returned ${shown} for '${name}'"
+            ) (resolvePolicy name);
             prov = provenance.${name} or null;
             provStr =
               let
@@ -109,16 +130,10 @@ let
             [
               "gen-bind: binding '${name}'${provStr} collision — system-wins, binding value dropped"
             ]
-          else if strategy == "bind-wins" then
+          else
             [
               "gen-bind: binding '${name}'${provStr} collision — bind-wins, module-system value shadowed"
             ]
-          # `resolvePolicy`'s codomain is the three declared policies: a result outside them is
-          # refused by name, where it is read, rather than read as `bind-wins` (den-hoag-d65u4).
-          else
-            throw "gen-bind.mkMergeValidator: `resolvePolicy` returned ${
-              if builtins.isString strategy then builtins.toJSON strategy else "a ${builtins.typeOf strategy}"
-            } for '${name}', not one of \"bind-wins\", \"system-wins\", \"error\""
         ) boundArgNames;
       in
       # Lazy `config.warnings` — NOT `builtins.seq checks { … }`. The validator is a
@@ -156,6 +171,8 @@ in
     ];
     open = true;
   } (args: mkMergeValidatorCore (args // { fullyApplied = false; }));
-  cores.mkMergeValidator = mkMergeValidatorCore;
-  cores.systemArg = systemArg;
+  cores = {
+    mkMergeValidator = mkMergeValidatorCore;
+    inherit decodePolicy systemArg;
+  };
 }

@@ -87,7 +87,11 @@ let
     else if
       builtins.isAttrs (bindings.${name} or null) && (bindings.${name} or { }) ? _mergeStrategy
     then
-      bindings.${name}._mergeStrategy
+      # The annotation lives inside a binding value, so it is decoded where it is read: decoding it
+      # when `wrap opts` is formed would force the value (den-hoag-bvpuo).
+      mergeStrategyLib.cores.decodePolicy (
+        shown: "gen-bind: binding '${name}' has `_mergeStrategy` ${shown}"
+      ) bindings.${name}._mergeStrategy
     else
       defaultMergeStrategy;
 
@@ -415,14 +419,37 @@ let
   # restated, so the door and the defaults cannot disagree. `wrapCore`/`wrapAllCore` stay the
   # unchecked record-taking cores this library's own callers use (the hosted terminal's
   # `bindFormals`, and `wrapImportsModule` per import).
+  #
+  # The two cfg-level policy fields are caller DATA with a closed codomain, so they are decoded with
+  # the keys, when `wrap opts` is formed, each refusal naming the field the caller wrote
+  # (den-hoag-bvpuo). A value's own `_mergeStrategy` is decoded where `resolvePolicy` reads it.
+  checkPolicies =
+    door: o:
+    let
+      strategies = o.mergeStrategies or { };
+      decode = field: mergeStrategyLib.cores.decodePolicy (shown: "${door}: `${field}` is ${shown}");
+    in
+    if !builtins.isAttrs strategies then
+      throw "${door}: `mergeStrategies` must be an attrset of policies, not a ${builtins.typeOf strategies}"
+    else
+      builtins.deepSeq [
+        (decode "defaultMergeStrategy" (o.defaultMergeStrategy or defaultCfg.defaultMergeStrategy))
+        (builtins.mapAttrs (k: decode "mergeStrategies.${k}") strategies)
+      ] o;
   wrap = prelude.door {
     name = "gen-bind.wrap";
     optional = builtins.attrNames defaultCfg;
-  } (o: module: wrapCore (o // { inherit module; }));
-  wrapAll = prelude.door {
-    name = "gen-bind.wrapAll";
-    optional = builtins.attrNames defaultCfg;
-  } (o: modules: wrapAllCore (o // { inherit modules; }));
+  } (o: builtins.seq (checkPolicies "gen-bind.wrap" o) (module: wrapCore (o // { inherit module; })));
+  wrapAll =
+    prelude.door
+      {
+        name = "gen-bind.wrapAll";
+        optional = builtins.attrNames defaultCfg;
+      }
+      (
+        o:
+        builtins.seq (checkPolicies "gen-bind.wrapAll" o) (modules: wrapAllCore (o // { inherit modules; }))
+      );
 in
 {
   inherit
