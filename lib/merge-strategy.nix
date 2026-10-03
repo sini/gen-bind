@@ -29,7 +29,7 @@ let
   # substrate closure — this function — executes inside the target's
   # evaluation whenever a bound name collides with a module-system arg,
   # reading `provenance` and the resolved policy, and it throws on a
-  # `_mergeStrategy = "error"` opt-in.
+  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three.
   # (iii) THE ARGUED IMPOSSIBILITY is `crossing-adapter-set.nix`'s: closing this
   # would have to move collision detection substrate-side, before any target
   # module set exists — SITE-2's argued impossibility under ADR-0013, not a
@@ -80,10 +80,16 @@ let
             [
               "gen-bind: binding '${name}'${provStr} collision — system-wins, binding value dropped"
             ]
-          else
+          else if strategy == "bind-wins" then
             [
               "gen-bind: binding '${name}'${provStr} collision — bind-wins, module-system value shadowed"
             ]
+          # `resolvePolicy`'s codomain is the three declared policies: a result outside them is
+          # refused by name, where it is read, rather than read as `bind-wins` (den-hoag-d65u4).
+          else
+            throw "gen-bind.mkMergeValidator: `resolvePolicy` returned ${
+              if builtins.isString strategy then builtins.toJSON strategy else "a ${builtins.typeOf strategy}"
+            } for '${name}', not one of \"bind-wins\", \"system-wins\", \"error\""
         ) boundArgNames;
       in
       # Lazy `config.warnings` — NOT `builtins.seq checks { … }`. The validator is a

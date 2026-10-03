@@ -176,11 +176,12 @@ let
   # value shadowed"). This is WARN-AND-PROCEED, not a refusal: the design of
   # record's §2.11 holds refusals only, and its sibling block names this class
   # as warned-at-the-target. A substrate `Refusal` stays a tagged VALUE, never a
-  # throw — nothing here changes that; the one throw a validator can raise is
-  # the per-value `_mergeStrategy = "error"` spelling, the consumer's own
-  # opt-in, raised inside the consumer's own evaluation exactly as the retired
-  # surface raised it. The price, stated: a validator DEFINES `warnings`, so a
-  # target evaluation receiving a crossed binding must declare that option —
+  # throw — nothing here changes that; a validator raises two throws: the
+  # per-value `_mergeStrategy = "error"` spelling, the consumer's own opt-in,
+  # raised inside the consumer's own evaluation exactly as the retired surface
+  # raised it, and the refusal of a strategy outside the declared three. The
+  # price, stated: a validator DEFINES `warnings`, so a target evaluation
+  # receiving a crossed binding must declare that option —
   # true of every NixOS-shaped target, and the same imposition the retired
   # surface made.
   #
@@ -196,7 +197,8 @@ let
   # `mkMergeValidator` builds (`merge-strategy.nix`) — executes inside the target's
   # evaluation whenever a bound name collides with a module-system arg, reading
   # `provenance` and the resolved collision policy, and it throws on a
-  # `_mergeStrategy = "error"` opt-in (O-3 measures the ground: the validator is
+  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three
+  # (O-3 measures the ground: the validator is
   # spliced into the target's module set at length 2, kinds
   # `[ "attrs" "FUNCTION" ]`; the trailing lambda names itself `mkMergeValidator`).
   #
