@@ -79,8 +79,13 @@ in
           contract.check
         else
           applicable.door "contract.apply" "check" contract.check;
+      # `check` is a predicate: a result that is not a Boolean is refused by name rather than
+      # reaching `if`, whose own type error is uncatchable (den-hoag-5rz5r).
+      ok = check value;
     in
-    if check value then
+    if !builtins.isBool ok then
+      throw "gen-bind.contract.apply: `check` returned a ${builtins.typeOf ok}, not a Boolean"
+    else if ok then
       value
     else
       throw (
