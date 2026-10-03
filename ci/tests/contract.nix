@@ -95,4 +95,40 @@ in
       !(builtins.tryEval (contract.apply c 42 null)).success;
     expected = true;
   };
+
+  # THE RESULT DOOR (den-hoag-5rz5r): `check` is a predicate, so a result that is not a Boolean is
+  # refused by name, catchably. WHAT A FAILING RUN LOOKS LIKE: without the door, `if` aborts
+  # UNCATCHABLY with Nix's own `expected a Boolean but found a string`, naming neither the site nor
+  # the field, and `tryEval` cannot see it.
+  flake.tests.contract.test-apply-refuses-a-non-boolean-result-catchably = {
+    expr =
+      builtins.map (r: (builtins.tryEval (contract.apply (contract.mk { } (_: r)) 1 null)).success)
+        [
+          "yes"
+          null
+          1
+          { }
+        ];
+    expected = [
+      false
+      false
+      false
+      false
+    ];
+  };
+
+  flake.tests.contract.test-apply-serves-a-boolean-result-from-a-functor = {
+    expr = contract.apply (contract.mk { } { __functor = _: _: true; }) 1 null;
+    expected = 1;
+  };
+
+  flake.testsError.contract = {
+    test-apply-names-a-non-boolean-result = {
+      expr = contract.apply (contract.mk { } (_: "yes")) 1 null;
+      expectedError = {
+        type = "ThrownError";
+        msg = "^gen-bind[.]contract[.]apply: `check` returned a string, not a Boolean$";
+      };
+    };
+  };
 }
