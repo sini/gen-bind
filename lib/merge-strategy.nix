@@ -29,7 +29,8 @@ let
   # substrate closure — this function — executes inside the target's
   # evaluation whenever a bound name collides with a module-system arg,
   # reading `provenance` and the resolved policy, and it throws on a
-  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three.
+  # `_mergeStrategy = "error"` opt-in, on a policy outside the declared three, and on a
+  # `system-wins` collision at a fully-applied module.
   # (iii) THE ARGUED IMPOSSIBILITY is `crossing-adapter-set.nix`'s: closing this
   # would have to move collision detection substrate-side, before any target
   # module set exists — SITE-2's argued impossibility under ADR-0013, not a
@@ -43,11 +44,37 @@ let
   # policy function, a name list and a provenance map — have no order among them, so they stay ONE
   # required-argument record rather than an arbitrary positional order. The record is a
   # `prelude.door` (open, R5): a missing field is refused by name, catchably, when it is applied.
-  # `cores.mkMergeValidator` is the unchecked core `wrap.nix` calls.
+  # `cores.mkMergeValidator` is the unchecked core `wrap.nix` calls; it also takes `fullyApplied`,
+  # which only `wrap` knows and which the published door pins `false`.
+  #
+  # The hosted module system's value for `name`, read where that system reads a module argument:
+  # the call's own args (`specialArgs` and every arg `evalModules` passes itself, `config` included),
+  # then `config._module.args` — nixpkgs `lib/modules.nix` `applyModuleArgs`,
+  # `args.${name} or config._module.args.${name}`. Presence is membership alone, never a forced
+  # value. The validator's collision test and `wrap`'s `system-wins` value both read this one record,
+  # so a warning and the value it describes cannot come apart (den-hoag-34i06).
+  systemArg =
+    moduleArgs: name:
+    let
+      mArgs = moduleArgs.config._module.args or { };
+    in
+    if moduleArgs ? ${name} then
+      {
+        present = true;
+        value = moduleArgs.${name};
+      }
+    else if mArgs ? ${name} then
+      {
+        present = true;
+        value = mArgs.${name};
+      }
+    else
+      { present = false; };
+
   mkMergeValidatorCore =
     args:
     let
-      inherit (args) boundArgNames provenance;
+      inherit (args) boundArgNames provenance fullyApplied;
       # `wrap` hands the core its own lambda, which passes on the builtin alone (den-hoag-k0whn).
       resolvePolicy =
         if builtins.isFunction args.resolvePolicy then
@@ -61,9 +88,7 @@ let
         checks = builtins.concatMap (
           name:
           let
-            mArgs = moduleArgs.config._module.args or { };
-            hasReal =
-              (builtins.tryEval (builtins.seq (mArgs.${name} or null) (mArgs ? ${name}))).value or false;
+            hasReal = (systemArg moduleArgs name).present;
             strategy = resolvePolicy name;
             prov = provenance.${name} or null;
             provStr =
@@ -76,6 +101,10 @@ let
             [ ]
           else if strategy == "error" then
             throw "gen-bind: binding '${name}'${provStr} collides with module-system arg — set mergeStrategy to resolve"
+          # A fully-applied module was called at wrap time, so no module-system value can reach it:
+          # `system-wins` cannot be honoured there, and the collision is refused by name.
+          else if strategy == "system-wins" && fullyApplied then
+            throw "gen-bind.mkMergeValidator: binding '${name}'${provStr} collides with a module-system arg under system-wins, but the module is fully applied (every formal bound), so the module-system value cannot be served"
           else if strategy == "system-wins" then
             [
               "gen-bind: binding '${name}'${provStr} collision — system-wins, binding value dropped"
@@ -126,6 +155,7 @@ in
       "provenance"
     ];
     open = true;
-  } mkMergeValidatorCore;
+  } (args: mkMergeValidatorCore (args // { fullyApplied = false; }));
   cores.mkMergeValidator = mkMergeValidatorCore;
+  cores.systemArg = systemArg;
 }

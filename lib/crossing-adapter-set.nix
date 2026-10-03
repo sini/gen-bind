@@ -197,7 +197,8 @@ let
   # `mkMergeValidator` builds (`merge-strategy.nix`) — executes inside the target's
   # evaluation whenever a bound name collides with a module-system arg, reading
   # `provenance` and the resolved collision policy, and it throws on a
-  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three
+  # `_mergeStrategy = "error"` opt-in, on a policy outside the declared three and on a
+  # `system-wins` collision at a fully-applied module
   # (O-3 measures the ground: the validator is
   # spliced into the target's module set at length 2, kinds
   # `[ "attrs" "FUNCTION" ]`; the trailing lambda names itself `mkMergeValidator`).

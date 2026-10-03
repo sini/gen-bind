@@ -203,11 +203,23 @@ let
         # decision and the thunk decision live INSIDE this thunk, so a binding value is
         # forced only when the module demands that specific arg. Chitil 2012 §2 — the
         # assertion thunk is not forced until the consumer demands it.
+        #
+        # `system-wins` serves the hosted module system's value, read by the same `systemArg` the
+        # validator's collision test reads, so the value and the warning cannot disagree
+        # (den-hoag-34i06). With no system value a `system-wins` key falls through to the thunk and
+        # binding arms. The `let` costs one unforced thunk per demanded bound arg under every policy;
+        # `systemArg` itself runs only under `system-wins`. Deciding presence there reads the names
+        # of `config._module.args`, so a module whose attribute STRUCTURE depends on its
+        # `system-wins`-bound arg recurses — nixpkgs' own price for an argument it reads from
+        # `_module.args`.
         bindValue =
           { moduleCallArgs, thunkConfig }:
           k:
-          if policy k == "system-wins" then
-            moduleCallArgs.${k} or bindings.${k}
+          let
+            sys = mergeStrategyLib.cores.systemArg moduleCallArgs k;
+          in
+          if policy k == "system-wins" && sys.present then
+            sys.value
           else if isThunkArg k then
             (thunkLib.cores.resolveThunks { inherit producerConfigs; } {
               config = thunkConfig;
@@ -223,6 +235,7 @@ let
         # Build the validator for collision detection
         validator = mergeStrategyLib.cores.mkMergeValidator {
           resolvePolicy = policy;
+          fullyApplied = allMatched;
           inherit boundArgNames provenance;
         };
 
@@ -296,17 +309,23 @@ let
     let
       results = builtins.map (imp: wrapCore (cfg // { module = imp; })) module.imports;
       anyWrapped = builtins.any (r: r.wrapped) results;
-      # Propagate only the first non-null sub-import validator
-      validatorResults = builtins.filter (r: r.validator != null) results;
-      firstValidator =
-        if validatorResults == [ ] then null else (builtins.head validatorResults).validator;
+      # Every sub-import's validator reads the same module args and their warnings concatenate, as
+      # `wrapAll`'s own `.all` does for top-level modules: keeping one would leave the other imports'
+      # collisions unwarned, and a fully-applied import's refusal unraised (den-hoag-34i06). The
+      # composite keeps the validator's lazy `{ warnings }` shape.
+      validators = builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
+      validator =
+        if validators == [ ] then
+          null
+        else
+          moduleArgs: { warnings = builtins.concatMap (v: (v moduleArgs).warnings) validators; };
     in
     {
       module = module // {
         imports = builtins.map (r: r.module) results;
       };
       wrapped = anyWrapped;
-      validator = firstValidator;
+      inherit validator;
       signature = signatureLib.cores.buildSignature { inherit (cfg) provenance; } {
         module = _: { };
         inherit (cfg) bindings defaultMergeStrategy mergeStrategies;
