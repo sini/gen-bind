@@ -599,15 +599,17 @@ Creates a contract. `check` is `value -> bool`. `blame` is an optional string ad
 contract.hasFields fields  # fields: [ "name" "system" ]
 ```
 
-Contract asserting the value has all listed fields.
+Contract asserting the value has all listed fields. `fields` is a list of strings; any other value is
+refused by name, catchably, when the contract is formed.
 
 ### `contract.isType`
 
 ```nix
-contract.isType type  # type: "set" | "list" | "string" | "int" | "bool" | ...
+contract.isType type  # type: "bool" | "float" | "int" | "lambda" | "list" | "null" | "path" | "set" | "string"
 ```
 
-Contract asserting `builtins.typeOf value == type`.
+Contract asserting `builtins.typeOf value == type`. `type` is one of the nine names `builtins.typeOf`
+returns; any other value is refused by name, catchably, when the contract is formed.
 
 ### `contract.nonEmpty`
 

@@ -15,6 +15,17 @@
 let
   provenanceLib = import ./provenance.nix { inherit prelude; };
   applicable = import ./applicable.nix { };
+  typeNames = [
+    "bool"
+    "float"
+    "int"
+    "lambda"
+    "list"
+    "null"
+    "path"
+    "set"
+    "string"
+  ];
 in
 {
   # `mk { message ? "contract violation"; blame ? null; } check` (den-hoag-7gp66 P2, R7): the
@@ -40,19 +51,42 @@ in
         }
       );
 
-  hasFields = fields: {
-    __contract = true;
-    check = v: builtins.all (f: v ? ${f}) fields;
-    message = "value must have fields: ${builtins.concatStringsSep ", " fields}";
-    blame = null;
-  };
+  # `fields` is caller data that `check` and the message both read as a list of strings; anything
+  # else is refused by name, catchably, when the contract is formed, rather than reaching Nix's own
+  # uncatchable `expected a list` / `expected a string` later (den-hoag-9kj1f).
+  hasFields =
+    fields:
+    if builtins.isList fields && builtins.all builtins.isString fields then
+      {
+        __contract = true;
+        check = v: builtins.all (f: v ? ${f}) fields;
+        message = "value must have fields: ${builtins.concatStringsSep ", " fields}";
+        blame = null;
+      }
+    else
+      throw "gen-bind.contract.hasFields: `fields` ${
+        if builtins.isList fields then
+          "holds a ${builtins.typeOf (builtins.head (builtins.filter (f: !builtins.isString f) fields))}"
+        else
+          "is a ${builtins.typeOf fields}"
+      }, not a list of strings";
 
-  isType = type: {
-    __contract = true;
-    check = v: builtins.typeOf v == type;
-    message = "value must be of type ${type}";
-    blame = null;
-  };
+  # `type` is caller data whose codomain is closed: the nine names `builtins.typeOf` returns. A name
+  # outside them matches no value, so it is refused by name, catchably, when the contract is formed,
+  # rather than forming and then blaming every value (den-hoag-9kj1f).
+  isType =
+    type:
+    if builtins.elem type typeNames then
+      {
+        __contract = true;
+        check = v: builtins.typeOf v == type;
+        message = "value must be of type ${type}";
+        blame = null;
+      }
+    else
+      throw "gen-bind.contract.isType: `type` is ${
+        if builtins.isString type then builtins.toJSON type else "a ${builtins.typeOf type}"
+      }, not one of ${builtins.concatStringsSep ", " (map builtins.toJSON typeNames)}";
 
   nonEmpty = {
     __contract = true;
