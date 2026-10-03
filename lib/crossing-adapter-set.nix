@@ -39,6 +39,7 @@
 }:
 let
   wrapLib = import ./wrap.nix { inherit prelude; };
+  applicable = import ./applicable.nix { };
 
   # ── inject ───────────────────────────────────────────────────────────────────
   # The successor to gen-flake's `injectArgs`. Its payload is `composed.values` —
@@ -271,7 +272,20 @@ let
       (
         args:
         let
-          inherit (args) evaluator locateConfig class;
+          inherit (args) class;
+          # Bound lazily: `evaluator` meets the door where `wrapUnit` applies it, and the published
+          # `locateConfig` where it is first read, still the caller's own value (den-hoag-k0whn).
+          # `locateConfig` is carried, not applied, so the Terminal field's `null` arm passes too.
+          evaluator =
+            if builtins.isFunction args.evaluator then
+              args.evaluator
+            else
+              applicable.door "crossing.mkHostedTerminal" "evaluator" args.evaluator;
+          locateConfig =
+            if args.locateConfig == null || builtins.isFunction args.locateConfig then
+              args.locateConfig
+            else
+              applicable.door "crossing.mkHostedTerminal" "locateConfig" args.locateConfig;
         in
         {
           inherit locateConfig;
@@ -509,8 +523,8 @@ let
   # who authors both — the substrate passes the Body through unread.
   mkOutputsTerminal =
     evaluate:
-    if !(builtins.isFunction evaluate || (builtins.isAttrs evaluate && evaluate ? __functor)) then
-      throw "gen-bind.crossing.mkOutputsTerminal: `evaluate` must be a function from the Body to the outputs, not a ${builtins.typeOf evaluate}"
+    if !(builtins.isFunction evaluate || applicable.verdict evaluate == true) then
+      throw "gen-bind.crossing.mkOutputsTerminal: `evaluate` must be a function from the Body to the outputs, or a functor whose `__functor` reaches one, not ${applicable.describe (applicable.verdict evaluate) evaluate}"
     else
       {
         locateConfig = null;

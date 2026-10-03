@@ -14,6 +14,7 @@
 { prelude }:
 let
   provenanceLib = import ./provenance.nix { inherit prelude; };
+  applicable = import ./applicable.nix { };
 in
 {
   # `mk { message ? "contract violation"; blame ? null; } check` (den-hoag-7gp66 P2, R7): the
@@ -31,7 +32,9 @@ in
       (
         o: check: {
           __contract = true;
-          inherit check;
+          # The record carries `check` itself; the door fires when `check` is first read
+          # (den-hoag-k0whn).
+          check = if builtins.isFunction check then check else applicable.door "contract.mk" "check" check;
           message = o.message or "contract violation";
           blame = o.blame or null;
         }
@@ -68,7 +71,16 @@ in
   # Chitil 2012 §2: "assert c is roughly the identity function"
   apply =
     contract: value: prov:
-    if contract.check value then
+    let
+      # A hand-built record meets the same door here; a lambda passes on the builtin alone, since
+      # `wrap`'s contract route calls this per binding.
+      check =
+        if builtins.isFunction contract.check then
+          contract.check
+        else
+          applicable.door "contract.apply" "check" contract.check;
+    in
+    if check value then
       value
     else
       throw (

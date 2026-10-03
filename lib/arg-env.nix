@@ -25,6 +25,7 @@
 # refused by name and catchably rather than aborting Nix's own uncatchable arity check.
 { prelude }:
 let
+  applicable = import ./applicable.nix { };
   # crossEval — separate-compilation of an opaque slice in the TERMINAL's own evaluator.
   #
   # Resolves `module` through a FRESH nested `evalModules` (the terminal's `lib`, threaded in
@@ -92,9 +93,14 @@ in
   #
   # `adaptArgs adapt module` (den-hoag-7gp66 P2, R7): positional, the derivation of the arg
   # environment as configuration and the placed module as the subject, last.
+  #
+  # `adapt` meets the applicability door (den-hoag-k0whn, `applicable.nix`) where it is applied, so
+  # the laziness above is unchanged and a value Nix cannot apply is refused by name, catchably.
   adaptArgs = adapt: module: args: {
     imports = [ module ];
-    _module.args = adapt args;
+    _module.args =
+      (if builtins.isFunction adapt then adapt else applicable.door "adaptArgs" "adapt" adapt)
+        args;
   };
 
   # configGate — an eval-time `mkIf` gate over a slice's nested-eval'd CONFIG.
@@ -159,12 +165,18 @@ in
       (
         o: gate: module:
         let
-          adapt = o.adapt or (_: { });
+          # Bound lazily, so each door fires where its value is first applied (den-hoag-k0whn).
+          gate' = if builtins.isFunction gate then gate else applicable.door "configGate" "gate" gate;
+          adapt =
+            let
+              a = o.adapt or (_: { });
+            in
+            if builtins.isFunction a then a else applicable.door "configGate" "adapt" a;
           absorb = o.absorb or true;
         in
         args: {
           config =
-            args.lib.mkIf (gate args)
+            args.lib.mkIf (gate' args)
               (crossEvalCore {
                 inherit absorb;
                 moduleArgs = adapt args;

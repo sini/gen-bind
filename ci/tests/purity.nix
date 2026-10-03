@@ -218,6 +218,7 @@ in
   flake.tests.purity.test-scan-subject-is-the-library-tree = {
     expr = map (s: s.name) sources;
     expected = [
+      "lib/applicable.nix"
       "lib/arg-env.nix"
       "lib/compose.nix"
       "lib/contract.nix"

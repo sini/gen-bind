@@ -494,9 +494,9 @@ b.crossing.mkOutputsTerminal evaluate                       # -> { adapter = Ada
 
 **`mkHostedTerminal` realizes `Formals` as `wrapAll`'s partial application**, its `Body` being the class module list. Two things ride the closure rather than crossing as bindings, and they are named because δ cannot see them and `E(u)` cannot count them: `extraModules`, `evaluator` and `osConfig` are *scope* residues with no reach of their own; **`nodes` is a correctness residue and it is silent** — a missed edge to a peer leaves the value correct and makes `E(u)` under-report, which can render `linked(u)` wrongly true. Separately, `bindFormals` returns `wrapAll`'s `.all`, carrying the merge-collision validators into the target's module set — the collision class's **named surface**: a crossed binding shadowing a module-system value lands in the target's `warnings` channel under the retired surface's own message family (*"gen-bind: binding '\<name>' collision — bind-wins, module-system value shadowed"*). This is warn-and-proceed, not a refusal — a substrate `Refusal` stays a tagged value; the one throw a validator can raise is the per-value `_mergeStrategy = "error"` spelling, the consumer's own opt-in, raised inside the consumer's own evaluation exactly as the retired surface raised it. The price, stated: a validator defines `warnings`, so a target evaluation receiving a crossed binding must declare that option — true of every NixOS-shaped target, and the same imposition the retired surface made. The `adapter` carriage is a closed record: `extent`, `extraModules`, `peerGraph`, `marksOf` and `readerId` are required, `passthrough` and `thunkBindings` optional, and a missing or unknown member is refused by name, catchably (`gen-bind.crossing.mkHostedTerminal.adapter: required field 'marksOf' is missing …`).
 
-**`mkOutputsTerminal` is a NULL-POSITION adapter over a caller-supplied `evaluate : Body -> outputs`** — `bindFormals`, `bindArgEnv` and `wrapFn` are all `null`, which `mkAdapter` accepts, since only `wrapUnit` and `interpret` are mandatory, and `wrapUnit` is `evaluate` applied to the Body. Which module system evaluates the Body is the caller's: the terminal names none, and a non-function `evaluate` is refused by name. A collect-only outputs fleet still builds; a crossing over it is **refused by name**, with the offered positions in the witness and the adapter selector blamed. This converts a silence into a witness: previously such a fleet could not receive a crossing because the function signature had nowhere to put one. **Growing an offered position onto it is a design change requiring its own ruling**, never an implementation detail — it would turn a by-construction guarantee into an as-authored one with every fixture still green.
+**`mkOutputsTerminal` is a NULL-POSITION adapter over a caller-supplied `evaluate : Body -> outputs`** — `bindFormals`, `bindArgEnv` and `wrapFn` are all `null`, which `mkAdapter` accepts, since only `wrapUnit` and `interpret` are mandatory, and `wrapUnit` is `evaluate` applied to the Body. Which module system evaluates the Body is the caller's: the terminal names none, and an `evaluate` Nix cannot apply is refused by name: a functor is admitted when its `__functor` chain reaches a function within 32 steps. A collect-only outputs fleet still builds; a crossing over it is **refused by name**, with the offered positions in the witness and the adapter selector blamed. This converts a silence into a witness: previously such a fleet could not receive a crossing because the function signature had nowhere to put one. **Growing an offered position onto it is a design change requiring its own ruling**, never an implementation detail — it would turn a by-construction guarantee into an as-authored one with every fixture still green.
 
-**The evaluated-config locator is a per-terminal field, never a fixed `.config` path.** For a `nixosSystem`-shaped evaluator the config sits at `.config` *of* the artifact; for an `evalModules`-shaped data terminal the artifact *is* the config, and a fixed path silently misreads the second by reaching for `.config` of something that already is one. `locateConfig = null` says "this terminal produces no evaluated config" visibly, the same way a `null` Adapter position says one is not offered.
+**The evaluated-config locator is a per-terminal field, never a fixed `.config` path.** For a `nixosSystem`-shaped evaluator the config sits at `.config` *of* the artifact; for an `evalModules`-shaped data terminal the artifact *is* the config, and a fixed path silently misreads the second by reaching for `.config` of something that already is one. `locateConfig = null` says "this terminal produces no evaluated config" visibly, the same way a `null` Adapter position says one is not offered. `mkHostedTerminal` republishes the caller's own `locateConfig`: `null` or a function passes, a functor meets the applicability door when the field is read, and `evaluator` meets it where `wrapUnit` applies it.
 
 ## API Reference
 
@@ -591,7 +591,7 @@ A hand-built marker (`{ __configThunk = true; __fn; }`) meets the same `fn` refu
 contract.mk { message ? "contract violation"; blame ? null; } check
 ```
 
-Creates a contract. `check` is `value -> bool`. `blame` is an optional string added to the error message.
+Creates a contract. `check` is `value -> bool`. `blame` is an optional string added to the error message. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when `check` is read (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ### `contract.hasFields`
 
@@ -619,7 +619,7 @@ Contract asserting the value is non-empty (non-empty list, non-empty attrset, or
 contract.apply contract value prov
 ```
 
-Applies a contract directly. Returns `value` if the check passes, throws with message + provenance string on failure.
+Applies a contract directly. Returns `value` if the check passes, throws with message + provenance string on failure. A hand-built record's `check` meets the same door as `contract.mk`'s.
 
 ### `mergeStrategy`
 
@@ -638,7 +638,7 @@ mergeStrategy.fromBindings bindings
 mkMergeValidator { resolvePolicy; boundArgNames; provenance; }
 ```
 
-Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the `config._module.args` probe runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced.
+Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the `config._module.args` probe runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ### `provenance.format`
 
@@ -700,7 +700,7 @@ Computes a signature record: `{ requires; bound; unsatisfied; declaredMergeStrat
 adaptArgs adapt module  # -> terminalArgs -> module
 ```
 
-Returns a terminal module-function that, at the `evalModules` crossing, injects `_module.args = adapt args` (visible to every sibling module) and imports `module`. `adapt : crossingArgs -> attrset` derives the extended arg environment from the terminal args (`config`/`options`/`pkgs`/`lib`/`specialArgs`). `_module.args` is the only arg-env channel a module can write from inside the eval. Laziness: `adapt` and `module` are forced only when the returned function is applied by `evalModules`.
+Returns a terminal module-function that, at the `evalModules` crossing, injects `_module.args = adapt args` (visible to every sibling module) and imports `module`. `adapt : crossingArgs -> attrset` derives the extended arg environment from the terminal args (`config`/`options`/`pkgs`/`lib`/`specialArgs`). `_module.args` is the only arg-env channel a module can write from inside the eval. Laziness: `adapt` and `module` are forced only when the returned function is applied by `evalModules`. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably at that application (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ### `crossEval`
 
@@ -724,7 +724,7 @@ configGate { adapt ? (_: {}); absorb ? true; } gate module  # -> terminalArgs ->
 
 Returns a terminal module-function that resolves `module` in a nested `crossEval` (threading `adapt args` as its `_module.args`) and contributes the result via `mkIf (gate args) nested.config`. `gate : crossingArgs -> bool` is the eval-time predicate.
 
-**★ The gate gates `config` (`mkIf`), never `imports`** — gating imports on a predicate that reads `options`/`config` is the fixpoint cycle `imports ← guard(options) ← options ← imports`. So a config-gate can conditionally supply config but **cannot** conditionally declare an option (a gated slice's option declarations stay in the nested eval). The common case — the guard checks an option declared *elsewhere* and gates *other* content — is sound; conditional option declaration is unsupported by construction (a module-system bound). Laziness: `gate`, `module`, `adapt` are forced only when the returned function is applied.
+**★ The gate gates `config` (`mkIf`), never `imports`** — gating imports on a predicate that reads `options`/`config` is the fixpoint cycle `imports ← guard(options) ← options ← imports`. So a config-gate can conditionally supply config but **cannot** conditionally declare an option (a gated slice's option declarations stay in the nested eval). The common case — the guard checks an option declared *elsewhere* and gates *other* content — is sound; conditional option declaration is unsupported by construction (a module-system bound). Laziness: `gate`, `module`, `adapt` are forced only when the returned function is applied. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably at that application, for `gate` and `adapt` alike (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ## Laziness Guarantees
 

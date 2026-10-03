@@ -1420,7 +1420,7 @@ in
     expr = (mkOutputsTerminal 1).adapter;
     expectedError = {
       type = "ThrownError";
-      msg = "^gen-bind[.]crossing[.]mkOutputsTerminal: `evaluate` must be a function from the Body to the outputs, not a int$";
+      msg = "^gen-bind[.]crossing[.]mkOutputsTerminal: `evaluate` must be a function from the Body to the outputs, or a functor whose `__functor` reaches one, not a int$";
     };
   };
 

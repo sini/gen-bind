@@ -14,6 +14,7 @@
 { prelude }:
 let
   provenanceLib = import ./provenance.nix { inherit prelude; };
+  applicable = import ./applicable.nix { };
 
   # ★★★ ADR-0023 (b) — POINTER DECLARATION, PARITY WITH `thunk.nix`'s. The full
   # four-part declaration for the crossing route this validator gets carried
@@ -46,7 +47,13 @@ let
   mkMergeValidatorCore =
     args:
     let
-      inherit (args) resolvePolicy boundArgNames provenance;
+      inherit (args) boundArgNames provenance;
+      # `wrap` hands the core its own lambda, which passes on the builtin alone (den-hoag-k0whn).
+      resolvePolicy =
+        if builtins.isFunction args.resolvePolicy then
+          args.resolvePolicy
+        else
+          applicable.door "mkMergeValidator" "resolvePolicy" args.resolvePolicy;
     in
     (
       moduleArgs:

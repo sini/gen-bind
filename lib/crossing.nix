@@ -47,6 +47,7 @@ let
   contractLib = import ./crossing-contract.nix { inherit prelude; };
   adapterLib = import ./crossing-adapter.nix { inherit prelude; };
   linksetLib = import ./crossing-linkset.nix { inherit prelude algebra; };
+  applicable = import ./applicable.nix { };
 
   # The concrete adapters — ADR-0031 F2's destination for gen-flake's
   # `inject.nix` and `terminals.nix`. `crossing-adapter.nix` defines the Adapter
@@ -121,6 +122,19 @@ let
             inherit kind;
             label = builtins.head bad;
             got = builtins.typeOf relata.${builtins.head bad};
+          };
+        }
+      # The injected mint is applied, so it must be what Nix can apply (den-hoag-k0whn), refused
+      # as `mkOperations` refuses it, as a value.
+      else if !(builtins.isFunction hashIdentity || applicable.verdict hashIdentity == true) then
+        refuse {
+          code = codes.declarationMissingField;
+          blamed = party.caller;
+          witness = {
+            object = "mintIdentity";
+            field = "hashIdentity";
+            expected = "kind -> [label] -> (label -> InertValue) -> Identity";
+            got = applicable.describe (applicable.verdict hashIdentity) hashIdentity;
           };
         }
       else
