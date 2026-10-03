@@ -63,7 +63,8 @@ arg name:
 - **contracts** — lazy per-binding assertions that fire when the arg is demanded (one
   narrowing, for a colliding binding — see [Lazy Contracts](#lazy-contracts)),
 - **provenance** — blame metadata that names the source in every error message,
-- **mergeStrategies** — collision policy when a binding name shadows a module-system arg.
+- **mergeStrategies** — the merge strategy per arg when a binding name shadows a module-system arg:
+  `"bind-wins"`, `"system-wins"` or `"error"`, and any other value is refused by name.
 
 `wrap` (single module) and `wrapAll` (batch) consume those maps and return a record
 `{ module; wrapped; validator; signature; advertisedArgs }`. `compose`/`composeWith` merge
@@ -196,7 +197,7 @@ bindings = {
 };
 ```
 
-Precedence at runtime: the cfg `mergeStrategies.<name>` entry wins, then the value's `_mergeStrategy` annotation, then `defaultMergeStrategy`. `mergeStrategy.fromBindings` reads the annotation channel alone, and reading `(fromBindings bindings).<name>` forces that binding value to WHNF.
+Precedence at runtime: the cfg `mergeStrategies.<name>` entry wins, then the value's `_mergeStrategy` annotation, then `defaultMergeStrategy`. Each is one of the three declared merge strategies, and anything else is refused by name, catchably, naming the field you wrote: `mergeStrategies.<name>` and `defaultMergeStrategy` when `wrap opts` is formed (`` gen-bind.wrap: `mergeStrategies.lib` is "sytem-wins", not one of "bind-wins", "system-wins", "error" ``), and the annotation where it is read (`` gen-bind: binding 'lib' has `_mergeStrategy` … ``), because decoding it earlier would force the binding value. `mergeStrategy.fromBindings` reads the annotation channel alone, and reading `(fromBindings bindings).<name>` forces that binding value to WHNF.
 
 Collision detection runs when `mkMergeValidator` is called with the module args. Warnings (for `bindWins`/`systemWins`) and errors (for `error`) include provenance if set.
 
@@ -516,7 +517,10 @@ wrap {
 
 The options come first, as one closed set: a misspelt option is refused by name, catchably, when
 `wrap opts` is formed (`prelude.door`; `wrap.__contract` publishes the set). The module is the
-subject, last.
+subject, last. At the same point `mergeStrategies` must be an attrset, and each of its values and
+`defaultMergeStrategy` must be a declared merge strategy; anything else is refused by name, catchably,
+naming the field (`` gen-bind.wrap: `defaultMergeStrategy` is a null, not one of … ``). `wrapAll`'s
+refusals name `gen-bind.wrapAll`.
 
 Returns `{ module; wrapped; validator; signature; advertisedArgs }`.
 
@@ -638,7 +642,7 @@ mergeStrategy.fromBindings bindings
 mkMergeValidator { resolvePolicy; boundArgNames; provenance; }
 ```
 
-Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the `config._module.args` probe runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced. A policy result outside the declared three (`"bind-wins"`, `"system-wins"`, `"error"`) is refused by name and catchably where a collision reads it, never read as bind-wins (`` gen-bind.mkMergeValidator: `resolvePolicy` returned "sytem-wins" for 'host', not one of … ``); absent a collision the policy is never applied. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
+Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the `config._module.args` probe runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced. A policy result outside the declared three (`"bind-wins"`, `"system-wins"`, `"error"`) is refused by name and catchably where a collision reads it, never read as bind-wins (`` gen-bind.mkMergeValidator: `resolvePolicy` returned "sytem-wins" for 'host', not one of … ``); absent a collision the policy is never applied. The closed set is the one `wrap` decodes against, so a `wrap` caller's misspelt merge strategy is refused first, at `wrap`'s own door, naming the field it wrote. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ### `provenance.format`
 
@@ -663,7 +667,7 @@ composeWith layers
 # layers: [ { bindings?; provenance?; contracts?; mergeStrategies?; } ... ]
 ```
 
-Structured composition across all four binding fields. Returns `{ bindings; provenance; contracts; mergeStrategies }`. A layer is a closed record: a field outside the four is refused by name, catchably, when the fold reaches that layer (`gen-bind.composeWith: 'bindngs' is not an option of this door …`).
+Structured composition across all four binding fields. Returns `{ bindings; provenance; contracts; mergeStrategies }`. A layer is a closed record: a field outside the four is refused by name, catchably, when the fold reaches that layer (`gen-bind.composeWith: 'bindngs' is not an option of this door …`), and so is a field that is not an attrset (`` gen-bind.composeWith: `mergeStrategies` must be an attrset, not a string ``).
 
 ### `wrapIdentity`
 
