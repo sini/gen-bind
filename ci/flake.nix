@@ -34,9 +34,9 @@
     # `gen-view/lib/carrier.nix`'s own `elementOf`, "a tag, not an attribute-name
     # match", so the check that the peer relation is a genuine tagged carrier
     # element has to be the SUBSTRATE's own check, not a re-implementation of it
-    # in this test file. `carrier.nix` takes `{ prelude, graph }:` and nothing
+    # in this test file. `carrier.nix` takes `{ prelude }:` and nothing
     # else, so this import goes straight to that one file with the SAME
-    # `prelude`/`graph` instance below — no `follows` wiring is needed because
+    # `prelude` instance below — no `follows` wiring is needed because
     # gen-view's own flake outputs are never resolved.
     gen-view.url = "github:sini/gen-view";
     # nixpkgs is the CI runner's dependency (test harness, treefmt) and supplies the
@@ -50,7 +50,6 @@
     inputs@{
       gen-harness,
       gen-prelude,
-      gen-graph,
       gen-delivery,
       gen-view,
       gen-algebra,
@@ -59,14 +58,13 @@
     }:
     let
       prelude = import "${gen-prelude}/lib";
-      graph = import "${gen-graph}/lib" { inherit prelude; };
       algebra = import "${gen-algebra}/lib";
       genBind = import ../lib { inherit prelude algebra; };
       # Called with `{ }`: gen-delivery resolves its own `algebra`/`aspects`
       # through its own standalone entry's `ci/flake.lock`-pinned defaults — the
-      # same channel `genBind`'s own standalone shim uses for `prelude`/`graph`.
+      # same channel `genBind`'s own standalone shim uses for `prelude`/`algebra`.
       genDelivery = gen-delivery.lib { };
-      genViewCarrier = import "${gen-view}/lib/carrier.nix" { inherit prelude graph; };
+      genViewCarrier = import "${gen-view}/lib/carrier.nix" { inherit prelude; };
       genScope = gen-scope.lib;
     in
     gen-harness.lib.mkCi {
@@ -81,7 +79,6 @@
         inherit
           genBind
           prelude
-          graph
           algebra
           genDelivery
           genViewCarrier
