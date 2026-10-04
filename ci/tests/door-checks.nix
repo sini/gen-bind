@@ -267,6 +267,19 @@ in
       ) guarded;
       expected = each (_: [ ]) guarded;
     };
+    # PARITY (den-hoag-ak8va, gate C1; gating): every guarded record step is published AS DATA by
+    # its options step, `__contract.next` (past a positional node), and the nest, read without
+    # application, equals the contract the record step answers with.
+    test-every-guarded-record-step-is-its-options-step-next = {
+      expr = each (
+        d:
+        let
+          recordNext = c: if c != null && c ? positional then recordNext c.next else c;
+        in
+        recordNext (F.options.${d.guardedBy}.door.__contract.next or null) == d.step.__contract
+      ) guarded;
+      expected = each (_: true) guarded;
+    };
     # Every options door on the surface is classified: a chained one has a guarded record row, and
     # the rest are named as not chained. `surfaceOptionDoors` is pinned as the enumerator's live
     # control: a walk that found nothing would leave `unclassified` empty too.
