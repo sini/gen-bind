@@ -21,14 +21,14 @@
 #   prelude — `buildSignature`'s `.bound` field is built by `prelude.genAttrs` over the bound
 #             argument names, so forcing it is what drives the call through gen-prelude rather than
 #             merely returning a record gen-bind assembled on its own.
-#   graph   — reached only through `genBind.crossing.mkHostedTerminal(...).adapter{...}`, which
-#             calls `graph.boundedBy`/`graph.forgetLabels` (ADR-0026's boundary-mark mechanism,
-#             reused) to bound the extent peer read; not forced by constructing `genBind` alone.
+#   graph   — a declared formal with NO reader in the library since den-hoag-gayc U2b: the extent
+#             peer read now resolves through the carriage's injected `engine` (gen-scope's one
+#             calculus), not `graph.boundedBy`. The formal and the flake input stay until the
+#             dependency edge retires, so the shim's signature is unchanged.
 #
-# THE KEY SET IS THE SIBLING SET, and holding that an identity is what keeps this cell's coverage
-# total. The shim constructs exactly the two siblings `../lib` reads, so each sibling has a key here
-# and a reader in the library, and nothing is left outside this cell's reach the way an unread formal
-# would be.
+# THE KEY SET IS THE SIBLING SET the shim constructs, and holding that an identity is what keeps
+# this cell's coverage total over the SIGNATURE. It no longer implies a reader per key: `graph` is
+# the one unread formal, named above.
 {
   genBind,
   prelude,

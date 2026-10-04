@@ -51,7 +51,7 @@
 # a home in a repository scheduled for orphaning.
 {
   genBind,
-  graph,
+  genScope,
   lib,
   prelude,
   ...
@@ -78,18 +78,19 @@ let
   inherit (genBind.crossing) injectAdapter mkHostedTerminal mkOutputsTerminal;
 
   # ── the identity peer carriage (extent peer-read shape, Q5 Arm A) ────────────
-  # `mkHostedTerminal(...).adapter{...}` now requires `peerGraph`/`marksOf`/
-  # `readerId` (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4,
-  # Q4 RULED: never defaulted). None of the fixtures in this suite exercise
+  # `mkHostedTerminal(...).adapter{...}` requires `peersOf`/`engine`/`readerId`
+  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4, Q4 RULED:
+  # never defaulted; `engine` is O10 (A)). None of the fixtures in this suite exercise
   # NARROWING — that is `crossing-extent-peer.nix`'s job — so every call site
   # here wants the IDENTITY peer relation: every key of its own `extent` peers
   # with every other, and no mark withholds anything, which reproduces this
   # suite's PRE-EXISTING behaviour (the whole `extent` reaches
   # `specialArgs.nodes` unchanged) rather than re-deriving it per call site.
-  # `readerId` is arbitrary — `boundedBy`'s `at` falls back to `classify id`
-  # for any id outside `peerGraph`'s own node list (gen-graph/lib/query.nix),
-  # and `marksOf` here ignores its argument entirely, so no reader is ever
-  # withheld anything regardless of which name is picked.
+  # `readerId` is a member of `extent` (the calculus refuses a reader outside
+  # the lifted scope by name), and `marksOf` states no mark for any node, so no
+  # reader is ever withheld anything regardless of which member is picked. An
+  # empty `extent` has no member; its readerId is never resolved, because no
+  # cell here reads that carriage's `nodes`.
   identityCarriage =
     carriage:
     let
@@ -97,11 +98,10 @@ let
     in
     carriage
     // {
-      peerGraph = graph.labeledFrom {
-        peer = _id: keys;
-      } keys;
+      peersOf = _id: keys;
+      engine = genScope;
       marksOf = _id: [ ];
-      readerId = "fixture";
+      readerId = if keys == [ ] then "fixture" else builtins.head keys;
     };
 
   # ── inject fixtures ──────────────────────────────────────────────────────────
@@ -1035,26 +1035,27 @@ in
   #
   # WHAT A FAILING RUN LOOKS LIKE: `nodes` reappears as a carriage formal — the
   # delivery surface's rename reverted or half-applied.
-  # ★ EXTENT PEER-READ SHAPE (Q4 RULED): `peerGraph`/`marksOf`/`readerId` joined
-  # the carriage formal set as REQUIRED, never-defaulted members
-  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4) — none of
-  # them is the retired framework name either, so the property this oracle
-  # tests (no `nodes` among the carriage formals) is unaffected; only the
-  # exact set grew.
+  # ★ EXTENT PEER-READ SHAPE (Q4 RULED): `peersOf`/`engine`/`readerId` are
+  # REQUIRED, never-defaulted members of the carriage formal set
+  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4; `engine` is
+  # O10 (A) of the one-calculus design) and `marksOf` an optional one (D4) —
+  # none of them is the retired framework name either, so the property this
+  # oracle tests (no `nodes` among the carriage formals) is unaffected.
   # ★ THE ADAPTER IS A `prelude.door` (den-hoag-54al9), a functor, so the reader is
   # gen-prelude's functor-aware `functionArgs` (the builtin aborts on a functor),
   # and the formal set is the door's published contract: the five required members
-  # and the two optional ones, `passthrough` and `thunkBindings`.
+  # and the three optional ones, `marksOf`, `passthrough` and `thunkBindings`.
   flake.tests.crossing-adapter-set.test-o-name-1b-carriage-formals-carry-no-framework-name = {
     expr = builtins.sort builtins.lessThan (
       builtins.attrNames (prelude.functionArgs hostedTerminal.adapter)
     );
     expected = [
+      "engine"
       "extent"
       "extraModules"
       "marksOf"
       "passthrough"
-      "peerGraph"
+      "peersOf"
       "readerId"
       "thunkBindings"
     ];

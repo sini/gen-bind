@@ -20,7 +20,7 @@
 # be read as doing so.
 {
   genBind,
-  graph,
+  genScope,
   genDelivery,
   genViewCarrier,
   ...
@@ -38,9 +38,7 @@ let
     "charlie"
   ];
 
-  peerGraph = graph.labeledFrom {
-    peer = _id: fixtureNodes;
-  } fixtureNodes;
+  peersOf = _id: fixtureNodes;
 
   isolatingMarksOf =
     id:
@@ -72,7 +70,7 @@ let
   # ── the GREEN terminal — the real construction, composed ─────────────────
   # `realize`'s own per-node carriage (`{name;modules;bindings;extent;
   # extraModules;passthrough?;}`) is a DIFFERENT shape from the Adapter's
-  # carriage (`{extent;extraModules;peerGraph;marksOf;readerId;
+  # carriage (`{extent;extraModules;peersOf;engine;readerId;marksOf?;
   # passthrough?;thunkBindings?;}`), so composing them needs a thin wrapper —
   # exactly what O-1's own instrument text asks for: "wire the real
   # gen-delivery.realize into the real gen-bind mkHostedTerminal adapter",
@@ -81,7 +79,7 @@ let
     {
       evaluator,
       marksOf,
-      peerGraph,
+      peersOf,
     }:
     let
       t = mkHostedTerminal {
@@ -95,7 +93,8 @@ let
       a = t.adapter (
         {
           inherit (carriage) extent extraModules;
-          inherit peerGraph marksOf;
+          inherit peersOf marksOf;
+          engine = genScope;
           readerId = carriage.name;
         }
         // (if carriage ? passthrough then { passthrough = carriage.passthrough; } else { })
@@ -116,7 +115,7 @@ let
   o1Green = mkGreenTerminal {
     evaluator = a: builtins.attrNames a.specialArgs.nodes;
     marksOf = isolatingMarksOf;
-    inherit peerGraph;
+    inherit peersOf;
   };
   o1GreenRealized = genDelivery.realize {
     inherit projected;
@@ -160,7 +159,8 @@ let
     greenHostedTerminal.adapter {
       extent = extentForAdapterProbe;
       extraModules = [ ];
-      inherit peerGraph;
+      inherit peersOf;
+      engine = genScope;
       marksOf = isolatingMarksOf;
       inherit readerId;
     };
@@ -174,7 +174,7 @@ let
   o3RawGreen = mkGreenTerminal {
     evaluator = a: a.specialArgs.nodes;
     marksOf = isolatingMarksOf;
-    inherit peerGraph;
+    inherit peersOf;
   };
   o3GreenRealized = genDelivery.realize {
     inherit projected;
@@ -184,7 +184,6 @@ let
     inherit projected;
     terminals.host = preFixRawTerminal;
   };
-  o3BoundedDirect = graph.boundedBy isolatingMarksOf peerGraph;
 
   # ════════════════════════════════════════════════════════════════════════
   # O-4 — the O-1 oracle's own instrument: the spine is readable without
@@ -196,9 +195,7 @@ let
     "alpha"
     "bravo"
   ];
-  o4PeerGraph = graph.labeledFrom {
-    peer = _id: o4Nodes;
-  } o4Nodes;
+  o4PeersOf = _id: o4Nodes;
   o4Projected.nodes = builtins.listToAttrs (
     map (n: {
       name = n;
@@ -212,7 +209,7 @@ let
   o4RawGreen = mkGreenTerminal {
     evaluator = a: a.specialArgs.nodes;
     marksOf = identityMarksOf;
-    peerGraph = o4PeerGraph;
+    peersOf = o4PeersOf;
   };
   # bravo's terminal is replaced by a throw — the positive control that a
   # peer READ (not a spine read) reaches and hits it.
@@ -232,7 +229,7 @@ let
   o4IdentityGreen3 = mkGreenTerminal {
     evaluator = a: builtins.attrNames a.specialArgs.nodes;
     marksOf = identityMarksOf;
-    inherit peerGraph;
+    inherit peersOf;
   };
   o4IdentityRealized = genDelivery.realize {
     inherit projected;
@@ -247,6 +244,70 @@ let
   # read through `tryEval`, exactly as O-4's own reach probe is.
   o6RedHanded = o3RedRealized.host.alpha;
   o6GreenHanded = o2AlphaAdapter.peerRelation;
+
+  # ════════════════════════════════════════════════════════════════════════
+  # LIFT EQUIVALENCE (den-hoag-gayc design §5.4) — the lifted `peer` step is
+  # the one-hop read of `peersOf`, and a planted edge is seen
+  # ════════════════════════════════════════════════════════════════════════
+  # An ASYMMETRIC relation, so the equivalence is not the complete relation's
+  # accident: alpha → bravo; bravo → alpha, bravo (a self-edge), charlie;
+  # charlie → nothing. No mark is stated, so each reader's admitted list must be
+  # exactly `liftPeersOf reader`, read directly. The planted arm hands the
+  # adapter the same relation with bravo → charlie dropped, and must differ.
+  liftPeersOf =
+    id:
+    {
+      alpha = [ "bravo" ];
+      bravo = [
+        "alpha"
+        "bravo"
+        "charlie"
+      ];
+      charlie = [ ];
+    }
+    .${id};
+  plantedPeersOf = id: builtins.filter (t: !(id == "bravo" && t == "charlie")) (liftPeersOf id);
+  admittedUnder =
+    peers: readerId:
+    (greenHostedTerminal.adapter {
+      extent = extentForAdapterProbe;
+      extraModules = [ ];
+      peersOf = peers;
+      engine = genScope;
+      marksOf = identityMarksOf;
+      inherit readerId;
+    }).peerRelation.admitted;
+  directRead = builtins.listToAttrs (
+    map (n: {
+      name = n;
+      value = liftPeersOf n;
+    }) fixtureNodes
+  );
+  liftedRead =
+    peers:
+    builtins.listToAttrs (
+      map (n: {
+        name = n;
+        value = admittedUnder peers n;
+      }) fixtureNodes
+    );
+
+  # ════════════════════════════════════════════════════════════════════════
+  # 6a FOREIGN CROSSING — no stated policy stamps `opaque` (D4, O12 (a))
+  # ════════════════════════════════════════════════════════════════════════
+  unstatedAdapterFor =
+    readerId:
+    greenHostedTerminal.adapter {
+      extent = extentForAdapterProbe;
+      extraModules = [ ];
+      inherit peersOf readerId;
+      engine = genScope;
+    };
+  opaqueWithheld = map (t: {
+    label = "peer";
+    marks = [ "opaque" ];
+    target = t;
+  }) fixtureNodes;
 in
 {
   flake.tests.crossing-extent-peer.test-o1-handed-peer-set-narrowed-by-reading-nodes-marks = {
@@ -372,8 +433,10 @@ in
       green = {
         alphaReachesCharlie = o3GreenRealized.host.alpha ? charlie;
         handedKeys = builtins.attrNames o3GreenRealized.host.alpha;
-        boundedSurface = builtins.sort builtins.lessThan (builtins.attrNames o3BoundedDirect);
-        boundedNodesFieldForIsolatedAlpha = o3BoundedDirect.nodes;
+        # The bound is the resolution's ANSWERS, never the lifted scope's node set, which is the
+        # whole class: the class keys stay three while the isolated reader is handed none.
+        admittedForIsolatedAlpha = o2AlphaAdapter.peerRelation.admitted;
+        classKeysBesideIt = builtins.attrNames o3GreenRealized.host;
       };
     };
     expected = {
@@ -388,12 +451,8 @@ in
       green = {
         alphaReachesCharlie = false;
         handedKeys = [ ];
-        boundedSurface = [
-          "labeledEdges"
-          "nodes"
-          "withheld"
-        ];
-        boundedNodesFieldForIsolatedAlpha = [
+        admittedForIsolatedAlpha = [ ];
+        classKeysBesideIt = [
           "alpha"
           "bravo"
           "charlie"
@@ -468,6 +527,51 @@ in
           "name"
           "withheld"
         ];
+      };
+    };
+  };
+
+  flake.tests.crossing-extent-peer.test-the-lifted-peer-step-equals-the-direct-read-and-a-planted-edge-differs = {
+    expr = {
+      lifted = liftedRead liftPeersOf;
+      direct = directRead;
+      plantedDiffers = liftedRead plantedPeersOf != directRead;
+    };
+    expected = {
+      lifted = directRead;
+      direct = {
+        alpha = [ "bravo" ];
+        bravo = [
+          "alpha"
+          "bravo"
+          "charlie"
+        ];
+        charlie = [ ];
+      };
+      plantedDiffers = true;
+    };
+  };
+
+  # No `marksOf` in the carriage: every lifted node carries `opaque`, so no peer
+  # edge is admitted from any reader and `withheld` names the default mark at
+  # each. The stated-policy arm is O-2 above (exactly the stated marks).
+  flake.tests.crossing-extent-peer.test-6a-a-crossing-with-no-stated-policy-stamps-opaque = {
+    expr = {
+      alpha = {
+        inherit ((unstatedAdapterFor "alpha").peerRelation) admitted withheld;
+      };
+      charlie = {
+        inherit ((unstatedAdapterFor "charlie").peerRelation) admitted withheld;
+      };
+    };
+    expected = {
+      alpha = {
+        admitted = [ ];
+        withheld = opaqueWithheld;
+      };
+      charlie = {
+        admitted = [ ];
+        withheld = opaqueWithheld;
       };
     };
   };

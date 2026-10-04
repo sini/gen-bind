@@ -8,7 +8,7 @@
 {
   lib,
   genBind,
-  graph,
+  genScope,
   ...
 }:
 let
@@ -38,10 +38,13 @@ let
     inherit lib;
     config = { };
   };
+  # The reader is a member of `extent`: the calculus refuses a reader outside the lifted scope by
+  # name. No peer is related, so the target is still handed `nodes = { }`.
   carriage = {
-    extent = { };
+    extent.fixture = { };
     extraModules = [ ];
-    peerGraph = graph.labeledFrom { peer = _id: [ ]; } [ ];
+    peersOf = _id: [ ];
+    engine = genScope;
     marksOf = _id: [ ];
     readerId = "fixture";
   };

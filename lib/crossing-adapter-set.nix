@@ -35,7 +35,6 @@
 {
   prelude,
   interpret,
-  graph,
 }:
 let
   wrapLib = import ./wrap.nix { inherit prelude; };
@@ -147,9 +146,9 @@ let
   # peer would leave the value correct and make `E(u)` under-report, which
   # could render `linked(u)` wrongly true. **THAT RESIDUE IS NO LONGER
   # SILENT** (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2, Q5
-  # Arm A, delivered below). `adapter` bounds `extent` through
-  # `gen-graph.boundedBy peerGraph marksOf` before it ever reaches
-  # `specialArgs.nodes`: the target is handed the admitted-key restriction,
+  # Arm A, delivered below). `adapter` bounds `extent` through the injected
+  # `engine`'s `resolve` over a scope lifted from `extent`'s keys before it ever
+  # reaches `specialArgs.nodes`: the target is handed the admitted-key restriction,
   # never the whole class, and a withheld peer is named, with the mark that
   # withheld it, in the adapter's own `peerRelation` field — a constructed,
   # tagged carrier element (`__element = "peerRelation"`), reachable
@@ -235,25 +234,37 @@ let
   # shut for the five that remain; an execution authorization is not a
   # convenience member, and this is why it alone was reopened.
   # ★★ THE ADAPTER CARRIAGE IS A CLOSED DOOR (den-hoag-54al9, ADR-0025 item 1): five required
-  # members and two optional ones, and no others. Its key set is TOTAL: an open (R5) door would
+  # members and three optional ones, and no others. Its key set is TOTAL: an open (R5) door would
   # admit a misspelt `thunkBngings` beside the five, which reads as `null` below, and the raw marker
   # would cross verbatim into the target with no refusal. So a missing member, which the native
   # required formal aborted on uncatchably, and an unknown one are both refused by name, catchably,
-  # by one construction. `peerGraph`, `marksOf` and `readerId` are required and never defaulted
-  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4, Q4).
+  # by one construction. `peersOf`, `engine` and `readerId` are required and never defaulted
+  # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.4, Q4; `engine` is O10 (A) of
+  # specs/2026-09-28-gen-one-resolution-calculus-design.md). `marksOf` is optional: an importer
+  # that states no policy gets `opaque` on every lifted node (D4), never no marks.
   adapterDoor = prelude.door {
     name = "gen-bind.crossing.mkHostedTerminal.adapter";
     required = [
       "extent"
       "extraModules"
-      "peerGraph"
-      "marksOf"
+      "peersOf"
+      "engine"
       "readerId"
     ];
     optional = [
+      "marksOf"
       "passthrough"
       "thunkBindings"
     ];
+  };
+
+  # O12 (a), D4 of the one-calculus build spec: THE CROSSING'S DEFAULT MARK, admitting no label. A
+  # bounded resolution does not traverse out of an unstated foreign scope, and `withheld` names
+  # `opaque` at every edge it holds back (ADR-0026: "a refusal at a boundary names the mark"). The
+  # default lives here, in the crossing, never in `resolve`, which defaults no mark.
+  opaque = {
+    name = "opaque";
+    admits = _: false;
   };
 
   # THE RECORD (den-hoag-7gp66 P2, R7 (a)): the injected evaluator, the config locator and the
@@ -297,8 +308,8 @@ let
             {
               extent,
               extraModules,
-              peerGraph,
-              marksOf,
+              peersOf,
+              engine,
               readerId,
               ...
             }@carriage:
@@ -311,19 +322,30 @@ let
               # that can be written.
               thunkBindings = carriage.thunkBindings or null;
 
-              # `peerGraph` is Q3-generic by construction: this file never builds one
-              # (§4.3 Q3 stays a fork, unpicked here) — it only consumes whatever
-              # `gen-graph.labeledFrom`-shaped `labeledGraph` value the caller hands it.
+              # `peersOf : id -> [ id ]` is Q3-generic by construction: this file never
+              # decides who peers with whom (§4.3 Q3 stays a fork, unpicked here).
+              marksOf = carriage.marksOf or (_: [ opaque ]);
 
               # ── the peer-relation bound (Q5 Arm A) ──────────────────────────
-              # `gen-graph.boundedBy` IS ADR-0026's mechanism, already shipped —
-              # reused, not reconstructed (spec §2.2). `bounded.nodes` is NOT the
-              # bound (it inherits `peerGraph`'s node set UNCHANGED, §2.1) — the
-              # bound is the admitted-key restriction of `extent`, built from
-              # `forgetLabels bounded .edges readerId`, gen-graph's own dedup
-              # projection reused rather than re-`unique`d here.
-              bounded = graph.boundedBy marksOf peerGraph;
-              admitted = (graph.forgetLabels bounded).edges readerId;
+              # `extent`'s keys LIFTED to an evaluated scope, and resolved by the one
+              # calculus (den-hoag-gayc; ADR-0026's marks are read in every resolution):
+              # one `peer` step from `readerId`, each edge admitted or withheld by the
+              # marks at its source. The lifted scope's node set is NOT the bound (it is
+              # the whole class) — the bound is the admitted-key restriction of
+              # `extent`, built from the answers' nodes.
+              lifted = engine.eval { parseParent = _: null; } {
+                children = _: _: { };
+                marks = _self: marksOf;
+                edges-peer = _self: peersOf;
+              } (engine.buildRoots { parentGraph = engine.vertices (builtins.attrNames extent); });
+              resolution = engine.resolve {
+                wf = engine.wellFormed {
+                  alphabet = [ "peer" ];
+                  expression = "peer";
+                };
+                dataFilter = _: true;
+              } lifted readerId;
+              admitted = map (a: a.node) resolution.answers;
               admittedExtent = builtins.listToAttrs (
                 map (k: {
                   name = k;
@@ -344,7 +366,7 @@ let
                 __element = "peerRelation";
                 name = "peers/${class}";
                 inherit admitted;
-                withheld = bounded.withheld readerId;
+                withheld = resolution.withheld readerId;
               };
             in
             {
@@ -446,9 +468,8 @@ let
                   # whose spine is the class's node keys. **What lands here is
                   # `admittedExtent`, not `extent`** — the admitted-key restriction
                   # under this reading node's marks (§2.1), never the whole class and
-                  # never `bounded`/`bounded.nodes` (§2.1, §2.3: `boundedBy` inherits
-                  # `nodes` unchanged, so that value would emit every withheld peer's
-                  # key too).
+                  # never the lifted scope's node set (§2.1, §2.3: it is the whole
+                  # class, so that value would emit every withheld peer's key too).
                   #
                   # `passthrough` is the TARGET-OWNED channel and it splices WHOLE.
                   # Its keys are the consumer's own — `osConfig` is home-manager's arg

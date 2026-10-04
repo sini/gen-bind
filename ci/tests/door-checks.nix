@@ -23,13 +23,13 @@
 # WHICH refusal fired and that it names the door first (R6).
 {
   genBind,
-  graph,
+  genScope,
   prelude,
   lib,
   ...
 }:
 let
-  F = import ./_door-table.nix { inherit genBind graph lib; };
+  F = import ./_door-table.nix { inherit genBind genScope lib; };
 
   applied = step: r: (builtins.tryEval (builtins.seq (step r) true)).success;
   unknown = {

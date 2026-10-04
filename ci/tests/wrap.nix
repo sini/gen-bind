@@ -1,7 +1,7 @@
 {
   lib,
   genBind,
-  graph,
+  genScope,
   ...
 }:
 let
@@ -47,7 +47,8 @@ let
         (t.adapter {
           extent = { };
           extraModules = [ ];
-          peerGraph = graph.labeledFrom { peer = _: [ ]; } [ ];
+          peersOf = _: [ ];
+          engine = genScope;
           marksOf = _: [ ];
           readerId = "fixture";
         }).bindFormals
