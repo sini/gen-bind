@@ -21,8 +21,10 @@
 {
   genBind,
   genScope,
+  graph,
   genDelivery,
   genViewCarrier,
+  prelude,
   ...
 }:
 let
@@ -303,6 +305,22 @@ let
       inherit peersOf readerId;
       engine = genScope;
     };
+  # ════════════════════════════════════════════════════════════════════════
+  # THE FACADE (U2b arm (b), retires with U2d) — the pre-migration carriage
+  # ════════════════════════════════════════════════════════════════════════
+  # gen-demo's C22 and C118 still hand a gen-graph `labeledFrom` record as
+  # `peerGraph`; until U2d migrates them, that carriage is served by the
+  # pre-migration bound, with its own label (`kin` here) in `withheld`.
+  legacyAdapterFor =
+    readerId:
+    greenHostedTerminal.adapter {
+      extent = extentForAdapterProbe;
+      extraModules = [ ];
+      peerGraph = graph.labeledFrom { kin = _: fixtureNodes; } fixtureNodes;
+      marksOf = isolatingMarksOf;
+      inherit readerId;
+    };
+
   opaqueWithheld = map (t: {
     label = "peer";
     marks = [ "opaque" ];
@@ -573,6 +591,28 @@ in
         admitted = [ ];
         withheld = opaqueWithheld;
       };
+    };
+  };
+
+  flake.tests.crossing-extent-peer.test-the-retiring-peerGraph-carriage-is-served-by-the-facade = {
+    expr = {
+      alpha = {
+        inherit ((legacyAdapterFor "alpha").peerRelation) admitted withheld;
+      };
+      bravoAdmitted = (legacyAdapterFor "bravo").peerRelation.admitted;
+      publishedFormalsNameNoPeerGraph = (prelude.functionArgs greenHostedTerminal.adapter) ? peerGraph;
+    };
+    expected = {
+      alpha = {
+        admitted = [ ];
+        withheld = map (t: {
+          label = "kin";
+          marks = [ "isolated" ];
+          target = t;
+        }) fixtureNodes;
+      };
+      bravoAdmitted = fixtureNodes;
+      publishedFormalsNameNoPeerGraph = false;
     };
   };
 }
