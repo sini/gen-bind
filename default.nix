@@ -1,9 +1,9 @@
 # Standalone (non-flake) entry. Flake consumers should use the `.lib` output.
 #
-# gen-bind is nixpkgs-lib-free (purity remediation): its three dependencies are gen-prelude,
-# gen-algebra (the term algebra BodyTerm was extracted into, den-hoag-lwbb1 unit 1) and
-# gen-graph — the ADR-0026 boundary-mark mechanism the extent peer-read shape reuses rather than
-# reconstructs (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §2.2, §4.1 Q1 Arm B).
+# gen-bind is nixpkgs-lib-free (purity remediation): its two dependencies are gen-prelude and
+# gen-algebra (the term algebra BodyTerm was extracted into, den-hoag-lwbb1 unit 1). The extent
+# peer read resolves through the carriage's injected `engine` (gen-scope's one calculus,
+# den-hoag-gayc), so gen-graph is no longer a dependency.
 #
 # THREE CHANNELS, ONE PRECEDENCE, AND NONE OF THEM IS A PROBE. A named formal per dependency wins;
 # the `inputs` bag is next, tested by attrset membership so a supplied-but-throwing value throws as
@@ -79,7 +79,6 @@ in
     }:
     import ./lib deps,
   prelude ? inputs.gen-prelude or (dep [ "gen-prelude" ]),
-  graph ? inputs.gen-graph or (dep [ "gen-graph" ]),
   algebra ? inputs.gen-algebra or (dep [ "gen-algebra" ]),
 }:
 # THE BODY IS EAGER, AND THAT IS WHAT MAKES THE ENTRY CELL TOTAL RATHER THAN PARTIAL. `forced` forces
@@ -89,7 +88,7 @@ in
 # THE FORCE STOPS AT WHNF DELIBERATELY: `builtins.seq` of an attrset does not force its members, so
 # this reaches the dependency's root VALUE and never a member of it.
 let
-  deps = { inherit prelude graph algebra; };
+  deps = { inherit prelude algebra; };
   forced = builtins.deepSeq (builtins.mapAttrs (_: builtins.typeOf) deps) null;
 in
 builtins.seq forced (wire {

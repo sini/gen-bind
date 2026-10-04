@@ -5,12 +5,11 @@
   lib,
   genBind,
   prelude,
-  graph,
   ...
 }:
 {
   flake.tests.repl.test-entry-loads-the-surface = {
-    expr = builtins.attrNames (import ../repl.nix { inherit lib prelude graph; });
+    expr = builtins.attrNames (import ../repl.nix { inherit lib prelude; });
     expected = builtins.attrNames ({ inherit lib prelude genBind; } // genBind);
   };
 }

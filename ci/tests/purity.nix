@@ -2,13 +2,12 @@
 # pins "pure" as a checked property, not an aspiration — a stray `lib.foo` / `lib.types` /
 # `evalModules` / nixpkgs input creeping back into the library source fails CI.
 #
-# ★ TWO DEPENDENCIES NOW, BOTH NIXPKGS-LIB-FREE (the extent peer-read shape,
-# specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1 Q1 Arm B: "gen-bind
-# acquires gen-graph, ending its one-input shape"). The invariant this file checks was
-# never "single dependency" — no cell here ever asserted the dependency COUNT or NAMED
-# gen-prelude as the sole one — it was always "no nixpkgs surface", which gen-graph
-# does not carry either, so the scan and its expectations below are unchanged by the
-# second input, nor by the third, gen-algebra (den-hoag-lwbb1 unit 1), which declares no inputs.
+# ★ TWO DEPENDENCIES, BOTH NIXPKGS-LIB-FREE: gen-prelude and gen-algebra (den-hoag-lwbb1
+# unit 1), which declares no inputs. The invariant this file checks was never "single
+# dependency" — no cell here ever asserted the dependency COUNT or NAMED gen-prelude as
+# the sole one — it was always "no nixpkgs surface", so the scan and its expectations
+# below are unchanged by gen-graph's arrival (the extent peer-read shape) and its
+# departure (den-hoag-gayc U2d) alike.
 #
 # Scope: lib/**.nix + the root flake.nix (the library + its flake). NOT ci/ — the
 # test harness legitimately uses nixpkgs.lib (including, here, to do this scan).

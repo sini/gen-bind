@@ -35,7 +35,6 @@
 {
   prelude,
   interpret,
-  graph,
 }:
 let
   wrapLib = import ./wrap.nix { inherit prelude; };
@@ -268,72 +267,6 @@ let
     admits = _: false;
   };
 
-  # ★ FACADE (den-hoag-gayc U2b, arm (b)) — RETIRES WITH U2d. The carriage this adapter took before
-  # the one-calculus migration: a gen-graph `labeledFrom` record as `peerGraph`, bounded by
-  # `graph.boundedBy marksOf`. gen-demo's `constructs/c22.nix` and `constructs/c118.nix` still hand
-  # it, and they migrate in U2d; until then a carriage carrying `peerGraph` is served by this door
-  # and the gen-graph read below, unchanged. `adapter` publishes `adapterDoor`'s contract only, so
-  # the legacy form is reachable solely by a key the current door refuses.
-  legacyAdapterDoor = prelude.door {
-    name = "gen-bind.crossing.mkHostedTerminal.adapter";
-    required = [
-      "extent"
-      "extraModules"
-      "peerGraph"
-      "marksOf"
-      "readerId"
-    ];
-    optional = [
-      "passthrough"
-      "thunkBindings"
-    ];
-  };
-  legacyPeerRead =
-    carriage:
-    let
-      bounded = graph.boundedBy carriage.marksOf carriage.peerGraph;
-    in
-    {
-      admitted = (graph.forgetLabels bounded).edges carriage.readerId;
-      withheld = bounded.withheld carriage.readerId;
-    };
-
-  # ── the peer-relation bound (Q5 Arm A) ──────────────────────────────────────
-  # `extent`'s keys LIFTED to an evaluated scope, and resolved by the one calculus
-  # (den-hoag-gayc; ADR-0026's marks are read in every resolution): one `peer` step from
-  # `readerId`, each edge admitted or withheld by the marks at its source. The lifted scope's
-  # node set is NOT the bound (it is the whole class) — the bound is the admitted-key
-  # restriction of `extent`, built from the answers' nodes. `peersOf : id -> [ id ]` is
-  # Q3-generic by construction: this file never decides who peers with whom (§4.3 Q3 stays a
-  # fork, unpicked here).
-  peerRead =
-    {
-      extent,
-      peersOf,
-      engine,
-      readerId,
-      ...
-    }@carriage:
-    let
-      marksOf = carriage.marksOf or (_: [ opaque ]);
-      lifted = engine.eval { parseParent = _: null; } {
-        children = _: _: { };
-        marks = _self: marksOf;
-        edges-peer = _self: peersOf;
-      } (engine.buildRoots { parentGraph = engine.vertices (builtins.attrNames extent); });
-      resolution = engine.resolve {
-        wf = engine.wellFormed {
-          alphabet = [ "peer" ];
-          expression = "peer";
-        };
-        dataFilter = _: true;
-      } lifted readerId;
-    in
-    {
-      admitted = map (a: a.node) resolution.answers;
-      withheld = resolution.withheld readerId;
-    };
-
   # THE RECORD (den-hoag-7gp66 P2, R7 (a)): the injected evaluator, the config locator and the
   # class are three configuration operands of a constructor with no subject and no order among
   # them, so they stay ONE required-argument record. It is a `prelude.door` (open, R5): a missing
@@ -367,14 +300,17 @@ let
               args.locateConfig
             else
               applicable.door "crossing.mkHostedTerminal" "locateConfig" args.locateConfig;
+        in
+        {
+          inherit locateConfig;
 
-          # The Adapter record over one peer read: `peerRead` for the current carriage, the
-          # facade's `legacyPeerRead` for the retiring one.
-          adapterOf =
-            read:
+          adapter = adapterDoor (
             {
               extent,
               extraModules,
+              peersOf,
+              engine,
+              readerId,
               ...
             }@carriage:
             let
@@ -386,8 +322,30 @@ let
               # that can be written.
               thunkBindings = carriage.thunkBindings or null;
 
-              # The peer-relation bound (`peerRead` above, or the facade's).
-              inherit (read carriage) admitted withheld;
+              # `peersOf : id -> [ id ]` is Q3-generic by construction: this file never
+              # decides who peers with whom (§4.3 Q3 stays a fork, unpicked here).
+              marksOf = carriage.marksOf or (_: [ opaque ]);
+
+              # ── the peer-relation bound (Q5 Arm A) ──────────────────────────
+              # `extent`'s keys LIFTED to an evaluated scope, and resolved by the one
+              # calculus (den-hoag-gayc; ADR-0026's marks are read in every resolution):
+              # one `peer` step from `readerId`, each edge admitted or withheld by the
+              # marks at its source. The lifted scope's node set is NOT the bound (it is
+              # the whole class) — the bound is the admitted-key restriction of
+              # `extent`, built from the answers' nodes.
+              lifted = engine.eval { parseParent = _: null; } {
+                children = _: _: { };
+                marks = _self: marksOf;
+                edges-peer = _self: peersOf;
+              } (engine.buildRoots { parentGraph = engine.vertices (builtins.attrNames extent); });
+              resolution = engine.resolve {
+                wf = engine.wellFormed {
+                  alphabet = [ "peer" ];
+                  expression = "peer";
+                };
+                dataFilter = _: true;
+              } lifted readerId;
+              admitted = map (a: a.node) resolution.answers;
               admittedExtent = builtins.listToAttrs (
                 map (k: {
                   name = k;
@@ -407,7 +365,8 @@ let
               peerRelation = {
                 __element = "peerRelation";
                 name = "peers/${class}";
-                inherit admitted withheld;
+                inherit admitted;
+                withheld = resolution.withheld readerId;
               };
             in
             {
@@ -538,22 +497,8 @@ let
                 };
 
               inherit interpret;
-            };
-        in
-        {
-          inherit locateConfig;
-
-          adapter =
-            let
-              current = adapterDoor (adapterOf peerRead);
-              legacy = legacyAdapterDoor (adapterOf legacyPeerRead);
-            in
-            current
-            // {
-              __functor =
-                _: carriage:
-                if builtins.isAttrs carriage && carriage ? peerGraph then legacy carriage else current carriage;
-            };
+            }
+          );
         }
       );
 

@@ -41,7 +41,7 @@
     gen-view.url = "github:sini/gen-view";
     # nixpkgs is the CI runner's dependency (test harness, treefmt) and supplies the
     # REAL `lib.evalModules` the equivalence gate drives gen-bind output through. The
-    # library itself (../lib) takes gen-prelude, gen-graph and gen-algebra — see the purity
+    # library itself (../lib) takes gen-prelude and gen-algebra — see the purity
     # remediation and specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1.
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
   };
@@ -61,7 +61,7 @@
       prelude = import "${gen-prelude}/lib";
       graph = import "${gen-graph}/lib" { inherit prelude; };
       algebra = import "${gen-algebra}/lib";
-      genBind = import ../lib { inherit prelude graph algebra; };
+      genBind = import ../lib { inherit prelude algebra; };
       # Called with `{ }`: gen-delivery resolves its own `algebra`/`aspects`
       # through its own standalone entry's `ci/flake.lock`-pinned defaults — the
       # same channel `genBind`'s own standalone shim uses for `prelude`/`graph`.
