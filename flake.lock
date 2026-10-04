@@ -15,26 +15,6 @@
         "type": "github"
       }
     },
-    "gen-graph": {
-      "inputs": {
-        "gen-prelude": [
-          "gen-prelude"
-        ]
-      },
-      "locked": {
-        "lastModified": 1791110803,
-        "narHash": "sha256-y6EPpJlZmrv8CCL3CsEIfNGnS3Xs8RgAQHzeauouwDE=",
-        "owner": "sini",
-        "repo": "gen-graph",
-        "rev": "ce977b5576f938a2486bfb63a8580a7375d3834f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "sini",
-        "repo": "gen-graph",
-        "type": "github"
-      }
-    },
     "gen-prelude": {
       "locked": {
         "lastModified": 1791109638,
@@ -53,7 +33,6 @@
     "root": {
       "inputs": {
         "gen-algebra": "gen-algebra",
-        "gen-graph": "gen-graph",
         "gen-prelude": "gen-prelude"
       }
     }

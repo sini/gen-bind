@@ -1,6 +1,5 @@
 {
   prelude,
-  graph,
   algebra,
 }:
 let
@@ -14,7 +13,7 @@ let
   signatureLib = import ./signature.nix { inherit prelude; };
   wrapLib = import ./wrap.nix { inherit prelude; };
   argEnvLib = import ./arg-env.nix { inherit prelude; };
-  crossingLib = import ./crossing.nix { inherit prelude graph algebra; };
+  crossingLib = import ./crossing.nix { inherit prelude algebra; };
 in
 {
   # The boundary crossing: the crossing node, its derived demand relation, the

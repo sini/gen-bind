@@ -21,10 +21,8 @@
 {
   genBind,
   genScope,
-  graph,
   genDelivery,
   genViewCarrier,
-  prelude,
   ...
 }:
 let
@@ -305,22 +303,6 @@ let
       inherit peersOf readerId;
       engine = genScope;
     };
-  # ════════════════════════════════════════════════════════════════════════
-  # THE FACADE (U2b arm (b), retires with U2d) — the pre-migration carriage
-  # ════════════════════════════════════════════════════════════════════════
-  # gen-demo's C22 and C118 still hand a gen-graph `labeledFrom` record as
-  # `peerGraph`; until U2d migrates them, that carriage is served by the
-  # pre-migration bound, with its own label (`kin` here) in `withheld`.
-  legacyAdapterFor =
-    readerId:
-    greenHostedTerminal.adapter {
-      extent = extentForAdapterProbe;
-      extraModules = [ ];
-      peerGraph = graph.labeledFrom { kin = _: fixtureNodes; } fixtureNodes;
-      marksOf = isolatingMarksOf;
-      inherit readerId;
-    };
-
   opaqueWithheld = map (t: {
     label = "peer";
     marks = [ "opaque" ];
@@ -594,25 +576,23 @@ in
     };
   };
 
-  flake.tests.crossing-extent-peer.test-the-retiring-peerGraph-carriage-is-served-by-the-facade = {
-    expr = {
-      alpha = {
-        inherit ((legacyAdapterFor "alpha").peerRelation) admitted withheld;
-      };
-      bravoAdmitted = (legacyAdapterFor "bravo").peerRelation.admitted;
-      publishedFormalsNameNoPeerGraph = (prelude.functionArgs greenHostedTerminal.adapter) ? peerGraph;
-    };
-    expected = {
-      alpha = {
-        admitted = [ ];
-        withheld = map (t: {
-          label = "kin";
-          marks = [ "isolated" ];
-          target = t;
-        }) fixtureNodes;
-      };
-      bravoAdmitted = fixtureNodes;
-      publishedFormalsNameNoPeerGraph = false;
-    };
+  # THE RETIRED CARRIAGE IS REFUSED, NOT SERVED (den-hoag-gayc U2d). The pre-migration carriage —
+  # a gen-graph labeled record as `peerGraph` beside `marksOf`, with no `peersOf` and no `engine` —
+  # was served by a facade until gen-demo migrated; with the facade gone it meets the current
+  # door, which names the first required field it lacks.
+  flake.tests.crossing-extent-peer.test-the-retired-peerGraph-carriage-is-refused-by-name = {
+    expr =
+      (greenHostedTerminal.adapter {
+        extent = extentForAdapterProbe;
+        extraModules = [ ];
+        peerGraph = {
+          nodes = fixtureNodes;
+          labeledEdges = _: [ ];
+        };
+        marksOf = isolatingMarksOf;
+        readerId = "alpha";
+      }).peerRelation.admitted;
+    expectedError.type = "ThrownError";
+    expectedError.msg = "required field 'peersOf' is missing";
   };
 }

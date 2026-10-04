@@ -37,9 +37,8 @@
 #
 # ★★★ O-INJ-2 IS NOT HERE, AND ITS ABSENCE IS A DECISION. It requires a real
 # `composed.values` produced by `compose`, which gen-bind cannot reach —
-# gen-bind depends on gen-prelude, gen-graph (the extent peer-read shape,
-# specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §4.1) and gen-algebra
-# (only its term algebra, den-hoag-lwbb1 unit 1), and none of them reaches `compose`. It was RUN as an evaluation
+# gen-bind depends on gen-prelude and gen-algebra (only its term algebra,
+# den-hoag-lwbb1 unit 1), and neither reaches `compose`. It was RUN as an evaluation
 # and its verdict is recorded at the site it governs, in
 # `lib/crossing-adapter-set.nix`'s ADR-0023 declaration. Its nearest landed
 # neighbour is gen-flake's `ci/tests/flake-module.nix`
