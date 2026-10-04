@@ -580,7 +580,7 @@ in
   # a gen-graph labeled record as `peerGraph` beside `marksOf`, with no `peersOf` and no `engine` —
   # was served by a facade until gen-demo migrated; with the facade gone it meets the current
   # door, which names the first required field it lacks.
-  flake.tests.crossing-extent-peer.test-the-retired-peerGraph-carriage-is-refused-by-name = {
+  flake.testsError.crossing-extent-peer.test-the-retired-peerGraph-carriage-is-refused-by-name = {
     expr =
       (greenHostedTerminal.adapter {
         extent = extentForAdapterProbe;
