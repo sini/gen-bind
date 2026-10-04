@@ -562,6 +562,21 @@
         "type": "github"
       }
     },
+    "gen-identity_7": {
+      "locked": {
+        "lastModified": 1791084713,
+        "narHash": "sha256-f3xTsqlcxjVDci18Fm2TGeTT1VzVzeJb8pdm2UsCApc=",
+        "owner": "sini",
+        "repo": "gen-identity",
+        "rev": "e13b6905975483b3de2faa6b076ef6986e645d8a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-identity",
+        "type": "github"
+      }
+    },
     "gen-memo": {
       "inputs": {
         "gen-graph": "gen-graph",
@@ -951,6 +966,30 @@
         "owner": "sini",
         "repo": "gen-scope",
         "rev": "e9079d129c861d4f001fb87b791cffd517825ae3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-scope",
+        "type": "github"
+      }
+    },
+    "gen-scope_3": {
+      "inputs": {
+        "gen-graph": [
+          "gen-graph"
+        ],
+        "gen-identity": "gen-identity_7",
+        "gen-prelude": [
+          "gen-prelude"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791093250,
+        "narHash": "sha256-m/9pKMXy+++AmNJYk/gY/56D+XBIXQvKQj0Zj73YdBg=",
+        "owner": "sini",
+        "repo": "gen-scope",
+        "rev": "cd653a27369153f8b416cb229ff81b49bdc7de02",
         "type": "github"
       },
       "original": {
@@ -1487,6 +1526,7 @@
         "gen-graph": "gen-graph_6",
         "gen-harness": "gen-harness",
         "gen-prelude": "gen-prelude_16",
+        "gen-scope": "gen-scope_3",
         "gen-view": "gen-view",
         "nixpkgs": "nixpkgs_6"
       }

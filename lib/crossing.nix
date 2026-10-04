@@ -55,7 +55,7 @@ let
   # interpreter is threaded in because it is SUBSTRATE-side and target-agnostic:
   # an adapter chooses its Body, never its own contract semantics.
   adapterSetLib = import ./crossing-adapter-set.nix {
-    inherit prelude graph;
+    inherit prelude;
     inherit (contractLib) interpret;
   };
 

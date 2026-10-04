@@ -6,6 +6,15 @@
       url = "github:sini/gen-graph";
       inputs.gen-prelude.follows = "gen-prelude";
     };
+    # The resolution ENGINE the hosted terminal's carriage injects (O10 (A) of
+    # specs/2026-09-28-gen-one-resolution-calculus-design.md): the library never imports it, the
+    # caller hands it over as `engine`, so this is a test dependency only, the same terms as
+    # gen-delivery below. Its gen-prelude and gen-graph follow this flake's, one instance each.
+    gen-scope = {
+      url = "github:sini/gen-scope";
+      inputs.gen-prelude.follows = "gen-prelude";
+      inputs.gen-graph.follows = "gen-graph";
+    };
     # ★★ gen-delivery IS A TEST DEPENDENCY AND ONLY A TEST DEPENDENCY, ON THE SAME
     # TERMS AS gen-scope is for gen-view's own `ci/flake.nix`. O-1's oracle
     # (specs/2026-09-08-gen-bind-extent-peer-read-shape-spec.md §3) is explicit:
@@ -45,6 +54,7 @@
       gen-delivery,
       gen-view,
       gen-algebra,
+      gen-scope,
       ...
     }:
     let
@@ -57,6 +67,7 @@
       # same channel `genBind`'s own standalone shim uses for `prelude`/`graph`.
       genDelivery = gen-delivery.lib { };
       genViewCarrier = import "${gen-view}/lib/carrier.nix" { inherit prelude graph; };
+      genScope = gen-scope.lib;
     in
     gen-harness.lib.mkCi {
       inherit inputs;
@@ -74,6 +85,7 @@
           algebra
           genDelivery
           genViewCarrier
+          genScope
           ;
       };
     };

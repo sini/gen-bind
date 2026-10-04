@@ -18,13 +18,13 @@
 # outside the closed set, and `accepted`, that set (required, then optional). `composeWith`'s layer is
 # one, a door behind a positional list, so it is reached through `composeWith [ layer ]`. A closed
 # step with required fields carries `required` too, and each is dropped in turn: `mkHostedTerminal`'s
-# adapter carriage (den-hoag-54al9), a total key set of five required members and two optional ones.
+# adapter carriage (den-hoag-54al9), a total key set of five required members and three optional ones.
 #
 # The positional doors (`adaptArgs`, `stripBindingArgs`) carry no row: their arity is structural and
 # they have no field check.
 {
   genBind,
-  graph,
+  genScope,
   lib,
 }:
 let
@@ -38,8 +38,8 @@ let
   adapterRequired = [
     "extent"
     "extraModules"
-    "peerGraph"
-    "marksOf"
+    "peersOf"
+    "engine"
     "readerId"
   ];
 
@@ -347,12 +347,13 @@ in
       good = {
         extent.a = 1;
         extraModules = [ ];
-        peerGraph = graph.labeledFrom { peer = _: [ "a" ]; } [ "a" ];
-        marksOf = _: [ ];
+        peersOf = _: [ "a" ];
+        engine = genScope;
         readerId = "a";
       };
       extra = "thunkBngings";
       accepted = adapterRequired ++ [
+        "marksOf"
         "passthrough"
         "thunkBindings"
       ];
