@@ -92,12 +92,13 @@ let
 
   buildSignatureOptions = prelude.door {
     name = "gen-bind.buildSignature";
+    next = buildSignatureRecordSpec;
     optional = [
       "provenance"
       "vocabulary"
     ];
   };
-  buildSignatureRecord = prelude.door {
+  buildSignatureRecordSpec = {
     name = "gen-bind.buildSignature";
     required = [
       "module"
@@ -108,6 +109,7 @@ let
     open = true;
     optionsStep = buildSignature;
   };
+  buildSignatureRecord = prelude.door buildSignatureRecordSpec;
   buildSignature = buildSignatureOptions (o: buildSignatureRecord (buildSignatureCore o));
 in
 {

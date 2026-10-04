@@ -178,9 +178,10 @@ let
 
   resolveThunksOptions = prelude.door {
     name = "gen-bind.resolveThunks";
+    next = resolveThunksRecordSpec;
     optional = [ "producerConfigs" ];
   };
-  resolveThunksRecord = prelude.door {
+  resolveThunksRecordSpec = {
     name = "gen-bind.resolveThunks";
     required = [
       "config"
@@ -191,6 +192,7 @@ let
     open = true;
     optionsStep = resolveThunks;
   };
+  resolveThunksRecord = prelude.door resolveThunksRecordSpec;
   resolveThunks = resolveThunksOptions (o: resolveThunksRecord (resolveThunksCore o));
 in
 {
