@@ -374,9 +374,15 @@ let
   # so it refuses too, as two null origins would: its price is that a positionless supply reached
   # twice refuses.
   #
-  # ★ OPEN with the owner (den-hoag-yqz1j): ONE site evaluated twice — a factory called with two
-  # bodies under one origin — shows every non-content witness an honest diamond shows, so it
-  # collapses and the right operand's body survives. Only a content comparison separates it.
+  # ★ ENUMERATED ARGUED EXCEPTION (ADR-0025 item 1; owner-ruled 2026-10-05, den-hoag-yqz1j): ONE
+  # site evaluated twice — a factory called with two bodies under one origin — shows every
+  # non-content witness an honest diamond shows, so it collapses and the right operand's body
+  # survives: one body drops silently, and which one depends on merge order. Only a content
+  # comparison separates it, and that splits by evaluator (ADR-0034's bme8i carve-out), so it is
+  # released rather than refused. Its departures: item 1's never-silent, ADR-0016's scope, and the
+  # order-dependent survivor. THE CALLER'S CONTRACT: give each occurrence its own origin; nothing
+  # here can enforce it. RETIRES when callers can supply a per-occurrence origin (the declaration
+  # key, den-hoag-8hlo3 / den-hoag-hpusp): then this case refuses or separates.
   nodeUnion =
     na: nb:
     let

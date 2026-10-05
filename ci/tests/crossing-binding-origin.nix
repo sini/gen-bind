@@ -254,11 +254,13 @@ in
     };
   };
 
-  # ★ RESIDUE PIN, OPEN with the owner (den-hoag-yqz1j): R1, one factory site called with two
-  # bodies under one origin, shows every non-content witness an honest diamond shows. It collapses,
-  # and the RIGHT operand's body survives, so the survivor depends on merge order. This cell pins
-  # today's behaviour so the owner's ruling flips it deliberately; it is not a guarantee.
-  flake.tests.crossing-binding-origin.test-residue-yqz1j-one-site-two-closures-collapses-order-dependently = {
+  # ★ R1 SURVIVOR PIN, the ENUMERATED ARGUED EXCEPTION (ADR-0025 item 1; owner-ruled 2026-10-05,
+  # den-hoag-yqz1j): one factory site called with two bodies under one origin shows every
+  # non-content witness an honest diamond shows. It collapses, and the RIGHT operand's body
+  # survives, so the survivor depends on merge order. The caller's contract is a per-occurrence
+  # origin. The exception retires with the declaration key (den-hoag-8hlo3 / den-hoag-hpusp), and
+  # this cell flips then, deliberately; it pins the released behaviour, not a guarantee.
+  flake.tests.crossing-binding-origin.test-exception-yqz1j-one-site-two-closures-collapses-order-dependently = {
     expr = map (m: map (n: n.record.body null) (builtins.attrValues m.value.nodes)) [
       (x.merge (link "igloo" (factory (_: "alice-v1"))) (link "igloo" (factory (_: "alice-v2"))))
       (x.merge (link "igloo" (factory (_: "alice-v2"))) (link "igloo" (factory (_: "alice-v1"))))
