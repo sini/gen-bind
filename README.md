@@ -244,7 +244,7 @@ result = genBind.wrap {
 
 - **Opaque + general.** gen-bind does one lazy attrset index (`producerConfigs.${thunk.__sourceScope}`); it knows nothing about scopes, classes, or hosts. The consumer builds the map and chooses the key encoding — a scope with multiple class terminals (e.g. a host's `nixos` vs a user-cell's `home-manager`) must qualify the key so each thunk's `__sourceScope` selects the right terminal.
 - **Back-compat.** The default `producerConfigs = {}` is byte-identical to the prior behavior: every thunk resolves against the consumer `config`. A plain `mkThunk` thunk (`__sourceScope = null`) always resolves against the consumer config, even when a non-empty map is supplied; a `mkThunkFrom` thunk whose scope is absent from the map falls back to the consumer config.
-- **Both dispatch paths.** Thunks resolve whether the module is partially applied (some args still come from `evalModules`) or fully applied (every named arg bound — e.g. a channel-only `{ ch, ... }` where the `...` is not a `functionArgs` entry). A `__sourceScope` thunk resolves against its producer on both paths (the producer config is self-sufficient). A `null`-scope thunk on the fully-applied path has no `evalModules` `config`, so it resolves against a bound `config` arg if present, else sees `{}` — a null-scope config-thunk that needs `config` belongs on the partial-app path (declare `config` as an unbound arg).
+- **Both dispatch paths.** Thunks resolve whether the module is partially applied (some args still come from `evalModules`) or fully applied (every named arg bound — e.g. a channel-only `{ ch, ... }` where the `...` is not a `functionArgs` entry). A `__sourceScope` thunk resolves against its producer on both paths (the producer config is self-sufficient). A `null`-scope thunk on the fully-applied path does not read the `evalModules` `config`: it resolves against a bound `config` arg if present, else sees `{}` — a null-scope config-thunk that needs `config` belongs on the partial-app path (declare `config` as an unbound arg).
 - **Lazy (A17).** Supply `producerConfigs` as a lazy `lib.fix`/`genAttrs` over your terminals. gen-bind never forces a producer config at wrap time — it is read only to the depth `__fn` demands, at the consumer, on resolve.
 - **Loud on genuine cycle.** An acyclic-at-use cross-terminal read (the producer value does not read back into the consumer) resolves cleanly — Nix's own `lib.fix` ties the knot. A genuine cross-terminal cycle (the producer config transitively demands the same thunk) surfaces as Nix's `infinite recursion encountered` — loud and `tryEval`-uncatchable, never a silent stale read. (Theory: Söderberg & Hedin 2013 CHORAG §5.1 — materialization-as-attribution; let the evaluator's lazy fixpoint be the cross-terminal solver.)
 
@@ -523,7 +523,9 @@ refusals name `gen-bind.wrapAll`.
 
 Returns `{ module; wrapped; validator; signature; advertisedArgs }`.
 
-- `module` — wrapped or passthrough module
+- `module` — wrapped or passthrough module. A wrapped function module stays a function module: a
+  functor advertising the unbound formals, or, when every formal is bound, a lambda of the module
+  system's call args advertising none, which a hand caller with no module system applies to `{ }`
 - `wrapped` — `true` if any binding was injected
 - `validator` — `mkMergeValidator` result for collision checking, `null` if no bindings matched
 - `signature` — `buildSignature` result
@@ -643,7 +645,7 @@ mergeStrategy.fromBindings bindings
 mkMergeValidator { resolvePolicy; boundArgNames; provenance; }
 ```
 
-Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the collision test runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). A collision is the bound name's membership in `moduleArgs` or in its `config._module.args`, in nixpkgs' `applyModuleArgs` order, which is also where `wrap`'s `system-wins` serves its value from, so the value and the warning agree on every channel. Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced. Through `wrap`, a `system-wins` collision on a fully-applied module (every formal bound) is refused by name on `.warnings`, because no module-system value can reach a module called at wrap time; the published `mkMergeValidator` never refuses on that ground. A policy result outside the declared three (`"bind-wins"`, `"system-wins"`, `"error"`) is refused by name and catchably where a collision reads it, never read as bind-wins (`` gen-bind.mkMergeValidator: `resolvePolicy` returned "sytem-wins" for 'host', not one of … ``); absent a collision the policy is never applied. The closed set is the one `wrap` decodes against, so a `wrap` caller's misspelt merge strategy is refused first, at `wrap`'s own door, naming the field it wrote. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
+Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the collision test runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). A collision is the bound name's membership in `moduleArgs` or in its `config._module.args`, in nixpkgs' `applyModuleArgs` order, which is also where `wrap`'s `system-wins` serves its value from, so the value and the warning agree on every channel. Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced. Through `wrap`, a fully-applied module (every formal bound) is still a function of the module system's call args, so `system-wins` serves the hosted value there too. A policy result outside the declared three (`"bind-wins"`, `"system-wins"`, `"error"`) is refused by name and catchably where a collision reads it, never read as bind-wins (`` gen-bind.mkMergeValidator: `resolvePolicy` returned "sytem-wins" for 'host', not one of … ``); absent a collision the policy is never applied. The closed set is the one `wrap` decodes against, so a `wrap` caller's misspelt merge strategy is refused first, at `wrap`'s own door, naming the field it wrote. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ### `provenance.format`
 
@@ -735,9 +737,9 @@ Returns a terminal module-function that resolves `module` in a nested `crossEval
 
 - Binding values are never forced at `wrap` time — `builtins.functionArgs` introspects without
   evaluating, and membership in the injected attrset is value-free. Scope: on the
-  partial-application branch nothing is forced until `evalModules` calls the wrapper, but on
-  the fully-applied branch `.module` **is** the called module, so demanding it forces whatever
-  the module body demands.
+  partial-application branch nothing is forced until `evalModules` calls the wrapper, and on
+  the fully-applied branch `.module` is a function of the module system's call args, so nothing
+  is forced until it is applied; applying it forces whatever the module body demands.
 - Per-arg injection is per-key — each bound arg is injected as its own thunk, so only args the
   module actually demands are forced. Reading one binding never forces a sibling.
 - Contracts fire on demand — the contract thunk wraps the binding value in an `assert`; if the

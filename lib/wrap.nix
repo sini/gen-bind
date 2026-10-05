@@ -239,7 +239,6 @@ let
         # Build the validator for collision detection
         validator = mergeStrategyLib.cores.mkMergeValidator {
           resolvePolicy = policy;
-          fullyApplied = allMatched;
           inherit boundArgNames provenance;
         };
 
@@ -256,7 +255,11 @@ let
         remainingArgs = builtins.removeAttrs moduleArgs boundArgNames;
       in
       if allMatched then
-        # Fully applied — call immediately, result is an attrset module.
+        # Fully applied — every formal is bound, so the module needs nothing from the
+        # module system; the result is still a function of the module system's call
+        # args, which no formal advertises, so that `system-wins` reads the hosted
+        # system's value on this path as on every other (den-hoag-34i06, owner-ruled
+        # 2026-10-05). A hand caller with no module system applies it to `{ }`.
         # The fully-applied path is thunk-aware (consistent with the partial-app
         # branch below): a bound arg may still carry a __configThunk (e.g. a
         # channel-only consumer `{ ch, ... }` whose every named formal is bound,
@@ -265,17 +268,19 @@ let
         # resolved when the module demands that arg. producerConfigs
         # is self-sufficient for __sourceScope thunks (they resolve against the
         # PRODUCER config, not a consumer config) — the actual target here. A
-        # null-scope thunk on this path has no evalModules `config` to read (if it
+        # null-scope thunk on this path does not read the evalModules `config` (if it
         # needed one it would require `config` as an UNBOUND formal, routing it to
         # the partial-app path); it resolves against a bound `config` arg if one
         # was supplied, else `{}` — a documented ~vacuous edge.
         let
-          applied = module (
-            prelude.genAttrs boundArgNames (bindValue {
-              moduleCallArgs = { };
-              thunkConfig = if builtins.elem "config" boundArgNames then bindings.config else { };
-            })
-          );
+          applied =
+            moduleCallArgs:
+            module (
+              prelude.genAttrs boundArgNames (bindValue {
+                inherit moduleCallArgs;
+                thunkConfig = if builtins.elem "config" boundArgNames then bindings.config else { };
+              })
+            );
         in
         {
           module = applied;
@@ -315,7 +320,7 @@ let
       anyWrapped = builtins.any (r: r.wrapped) results;
       # Every sub-import's validator reads the same module args and their warnings concatenate, as
       # `wrapAll`'s own `.all` does for top-level modules: keeping one would leave the other imports'
-      # collisions unwarned, and a fully-applied import's refusal unraised (den-hoag-34i06). The
+      # collisions unwarned, and an `error` import's refusal unraised (den-hoag-34i06). The
       # composite keeps the validator's lazy `{ warnings }` shape.
       validators = builtins.filter (v: v != null) (builtins.map (r: r.validator) results);
       validator =

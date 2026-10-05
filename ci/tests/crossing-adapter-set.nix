@@ -1329,14 +1329,15 @@ in
   # one — which is the silent misread §2.3.3(b) forbids.
   flake.tests.crossing-adapter-set.test-o-trm-4-both-terminals-resolve-their-evaluated-config = {
     expr = {
-      dotConfig = builtins.head (dotConfigTerminal.locateConfig dotConfigClosed.value).built;
-      isConfig = builtins.head (isConfigTerminal.locateConfig isConfigClosed.value).built;
+      dotConfig = builtins.head (dotConfigTerminal.locateConfig dotConfigClosed.value).built { };
+      isConfig = builtins.head (isConfigTerminal.locateConfig isConfigClosed.value).built { };
     };
     # `classModule`'s only named formal is the bound one, so `wrapAll` applies it
-    # FULLY and the list's head carries the applied attrset rather than a lambda
-    # — which is also why this comparison can be an equality at all. The head,
-    # not the list: `.all` trails the merge-collision validator, a function, and
-    # functions do not compare.
+    # FULLY: the list's head is a function of the module system's call args alone,
+    # and this stub evaluator supplies none, so it is applied to `{ }` here — which
+    # is also why this comparison can be an equality at all. The head, not the
+    # list: `.all` trails the merge-collision validator, a function, and functions
+    # do not compare.
     expected = {
       dotConfig = {
         config.result = "alpha";
