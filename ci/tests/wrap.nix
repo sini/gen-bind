@@ -114,11 +114,17 @@ in
       in
       {
         wrapped = result.wrapped;
-        isAttrs = builtins.isAttrs result.module;
+        # A function of the module system's call args alone, even with every formal bound
+        # (den-hoag-34i06): applied to `{ }`, as a hand caller with no module system does.
+        isFunction = builtins.isFunction result.module;
+        noFormals = builtins.functionArgs result.module == { };
+        applied = result.module { };
       };
     expected = {
       wrapped = true;
-      isAttrs = true;
+      isFunction = true;
+      noFormals = true;
+      applied.networking.hostName = "igloo";
     };
   };
 
@@ -128,27 +134,30 @@ in
   # branch resolves it against producerConfigs BEFORE calling the module.
   flake.tests.wrap.test-fully-applied-config-thunk-producer-scoped = {
     expr =
-      (wrap
-        {
-          bindings = {
-            ch = [
-              (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
-            ];
-          };
-          producerConfigs = {
-            "host=iceberg" = {
-              networking.hostName = "iceberg";
-            };
-          };
-          thunkBindings = [ "ch" ];
-        }
-        (
-          { ch, ... }:
+      (
+        (wrap
           {
-            out = builtins.head ch;
+            bindings = {
+              ch = [
+                (genBind.mkThunkFrom "host=iceberg" ({ config, ... }: [ "h-${config.networking.hostName}" ]))
+              ];
+            };
+            producerConfigs = {
+              "host=iceberg" = {
+                networking.hostName = "iceberg";
+              };
+            };
+            thunkBindings = [ "ch" ];
           }
-        )
-      ).module.out;
+          (
+            { ch, ... }:
+            {
+              out = builtins.head ch;
+            }
+          )
+        ).module
+          { }
+      ).out;
     expected = "h-iceberg";
   };
 
@@ -157,26 +166,29 @@ in
   # (hasThunks = false), so the bound args apply byte-identically.
   flake.tests.wrap.test-fully-applied-no-thunk-byte-identical = {
     expr =
-      (wrap
-        {
-          bindings = {
-            host = {
-              name = "igloo";
-            };
-          };
-          producerConfigs = {
-            "host=iceberg" = {
-              networking.hostName = "iceberg";
-            };
-          };
-        }
-        (
-          { host }:
+      (
+        (wrap
           {
-            networking.hostName = host.name;
+            bindings = {
+              host = {
+                name = "igloo";
+              };
+            };
+            producerConfigs = {
+              "host=iceberg" = {
+                networking.hostName = "iceberg";
+              };
+            };
           }
-        )
-      ).module.networking.hostName;
+          (
+            { host }:
+            {
+              networking.hostName = host.name;
+            }
+          )
+        ).module
+          { }
+      ).networking.hostName;
     expected = "igloo";
   };
 
@@ -186,25 +198,28 @@ in
   # against it; otherwise it would see `{}`. Here `config` is bound ⇒ used.
   flake.tests.wrap.test-fully-applied-null-scope-thunk-uses-bound-config = {
     expr =
-      (wrap
-        {
-          bindings = {
-            ch = [
-              (genBind.mkThunk ({ config, ... }: [ config.networking.hostName ]))
-            ];
-            config = {
-              networking.hostName = "bound-cfg";
-            };
-          };
-          thunkBindings = [ "ch" ];
-        }
-        (
-          { ch, config, ... }:
+      (
+        (wrap
           {
-            out = builtins.head ch;
+            bindings = {
+              ch = [
+                (genBind.mkThunk ({ config, ... }: [ config.networking.hostName ]))
+              ];
+              config = {
+                networking.hostName = "bound-cfg";
+              };
+            };
+            thunkBindings = [ "ch" ];
           }
-        )
-      ).module.out;
+          (
+            { ch, config, ... }:
+            {
+              out = builtins.head ch;
+            }
+          )
+        ).module
+          { }
+      ).out;
     expected = "bound-cfg";
   };
 
@@ -420,6 +435,7 @@ in
           }
         )
       ).module
+        { }
     );
     expected = true;
   };
@@ -439,6 +455,7 @@ in
           }
         )
       ).module
+        { }
     );
     expected = false;
   };

@@ -196,8 +196,7 @@ let
   # `mkMergeValidator` builds (`merge-strategy.nix`) — executes inside the target's
   # evaluation whenever a bound name collides with a module-system arg, reading
   # `provenance` and the resolved collision policy, and it throws on a
-  # `_mergeStrategy = "error"` opt-in, on a policy outside the declared three and on a
-  # `system-wins` collision at a fully-applied module
+  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three
   # (O-3 measures the ground: the validator is
   # spliced into the target's module set at length 2, kinds
   # `[ "attrs" "FUNCTION" ]`; the trailing lambda names itself `mkMergeValidator`).
@@ -380,7 +379,7 @@ let
               # (see the header block above).
               #
               # ★★★ ADR-0023 (b) SITE 6 — THE WRAPPING PLACEMENT ITSELF IS A
-              # CROSSING, ON THE PARTIAL-APPLICATION BRANCH ONLY.
+              # CROSSING, ON THE PARTIAL- AND FULL-APPLICATION BRANCHES.
               #
               # (i) THIS SITE DOES NOT MEET ADR-0023 (c). `wrapAllCore`'s
               # partial-application branch (`wrap.nix`, `wrapFunctionModule`) places
@@ -394,14 +393,14 @@ let
               # `anyFunction`, which reads `true` on every function-shaped consumer
               # regardless and cannot discriminate (rejected, §2.7).
               #
-              # ★ SCOPED TO ONE OF THREE PLACEMENT BRANCHES, NOT EVERY FUNCTION-SHAPED
+              # ★ SCOPED TO TWO OF THREE PLACEMENT BRANCHES, NOT EVERY FUNCTION-SHAPED
               # MODULE. A consumer whose class module binds every formal
-              # (`allMatched == true`) is CALLED and its own returned attrset is
-              # placed (`wrap.nix`, head keys `[ "config" ]`, no substrate
-              # authorship); a consumer with no formal bound at all is placed
-              # unchanged (passthrough). The price below is owed only on the
-              # partial-application branch; charging every function-shaped module
-              # would overclaim two branches this site never touches.
+              # (`allMatched == true`) is placed as a SUBSTRATE-AUTHORED lambda of
+              # the module system's call args, advertising no formals, so that
+              # `system-wins` can read the hosted value there (den-hoag-34i06,
+              # owner-ruled 2026-10-05); the price below is owed on it as on the
+              # partial-application branch. A consumer with no formal bound at all
+              # is placed unchanged (passthrough), and this site never touches it.
               #
               # (ii) THE PRICE: a substrate closure — the `wrapper` `wrap.nix` builds
               # — executes inside the target's evaluation every time the target's
