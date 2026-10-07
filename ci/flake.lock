@@ -341,11 +341,11 @@
         "gen-scope": "gen-scope_3"
       },
       "locked": {
-        "lastModified": 1791368579,
-        "narHash": "sha256-rOorVnrYW+LNZUmVeb7TbqhkH5kaGp/4y0wvQlzOXb0=",
+        "lastModified": 1791386087,
+        "narHash": "sha256-MblpTtB2mn3/LOLKcxfxbozOF5asevO5MA6DM6FJsAQ=",
         "owner": "sini",
         "repo": "gen-delivery",
-        "rev": "8f41333d485a055033d105726c672033415e0465",
+        "rev": "095fefd8fcf7bbbda6679cd3089d98f9ee8ec071",
         "type": "github"
       },
       "original": {
