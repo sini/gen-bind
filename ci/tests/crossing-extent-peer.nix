@@ -23,6 +23,7 @@
   genScope,
   genDelivery,
   genViewCarrier,
+  prelude,
   ...
 }:
 let
@@ -593,6 +594,18 @@ in
         readerId = "alpha";
       }).peerRelation.admitted;
     expectedError.type = "ThrownError";
-    expectedError.msg = "required field 'peersOf' is missing";
+    # gen-prelude's refusal text, composed with the door's own literal required set (den-hoag-7jltk).
+    expectedError.msg =
+      "^"
+      + prelude.escapeRegex (
+        prelude.refusals.missingField "gen-bind.crossing.mkHostedTerminal.adapter" [
+          "extent"
+          "extraModules"
+          "peersOf"
+          "engine"
+          "readerId"
+        ] "peersOf"
+      )
+      + "$";
   };
 }

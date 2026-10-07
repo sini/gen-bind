@@ -60,38 +60,38 @@ let
           "crossing"
         ];
 
-  # The bytes. `[.]`, `[(]` and `[)]` neutralise the metacharacters, as in gen-prelude's goldens.
-  quoted = names: lib.concatMapStringsSep ", " (n: "'${n}'") names;
-  name = key: "gen-bind[.]${builtins.replaceStrings [ "." ] [ "[.]" ] key}";
-  pin = key: msg: {
+  # The bytes: the composed text, escaped whole, as in gen-prelude's goldens.
+  # gen-prelude's refusal text, composed with this library's own literal door, field and accepted
+  # set (den-hoag-7jltk): every assertion kept, none of gen-prelude's wording copied. Anchored at
+  # both ends, so a grown or reordered set turns the cell red.
+  inherit (prelude) refusals;
+  name = key: "gen-bind.${key}";
+  pin = text: {
     type = "ThrownError";
-    msg = "^${name key}: ${msg}$";
+    msg = "^" + prelude.escapeRegex text + "$";
   };
   optionGoldens = key: row: {
     "test-${key}-unknown-option-message" = {
       expr = row.door unknown;
-      expectedError = pin key "'unknownField' is not an option of this door; the options are closed [(]accepted: ${quoted row.optional}[)] [(]in prelude[.]checkOptions[)]";
+      expectedError = pin (refusals.unknownOption (name key) row.optional "unknownField");
     };
   };
   recordGoldens =
     key: row:
-    let
-      req = "[(]required: ${quoted row.required}[)] [(]in prelude[.]checkRequired[)]";
-    in
     {
       "test-${key}-missing-required-field-message" = {
         expr = row.step (builtins.removeAttrs row.good [ row.drop ]);
-        expectedError = pin key "required field '${row.drop}' is missing ${req}";
+        expectedError = pin (refusals.missingField (name key) row.required row.drop);
       };
       "test-${key}-non-attrset-argument-message" = {
         expr = row.step 1;
-        expectedError = pin key "the argument must be an attrset, not a int ${req}";
+        expectedError = pin (refusals.recordNotASet (name key) row.required 1);
       };
     }
     // lib.optionalAttrs (row ? typo) {
       "test-${key}-misspelt-field-message" = {
         expr = row.step (builtins.removeAttrs row.good [ row.drop ] // { ${row.typo} = 1; });
-        expectedError = pin key "required field '${row.drop}' is missing ${req}";
+        expectedError = pin (refusals.missingField (name key) row.required row.drop);
       };
     }
     // lib.optionalAttrs (row ? guardedBy) (
@@ -101,7 +101,7 @@ let
       {
         "test-${key}-misplaced-option-message" = {
           expr = row.step (row.good // { ${o} = null; });
-          expectedError = pin key "'${o}' is an option of ${name row.guardedBy}, not a field of this record [(]in prelude[.]checkGuarded[)]";
+          expectedError = pin (refusals.guardedField (name key) (name row.guardedBy) o);
         };
       }
     );
@@ -110,7 +110,7 @@ let
     {
       "test-${key}-extra-field-message" = {
         expr = row.step (row.good // { ${row.extra} = 1; });
-        expectedError = pin key "'${row.extra}' is not an option of this door; the options are closed [(]accepted: ${quoted row.accepted}[)] [(]in prelude[.]checkOptions[)]";
+        expectedError = pin (refusals.unknownOption (name key) row.accepted row.extra);
       };
     }
     // lib.optionalAttrs (row ? required) (
@@ -119,7 +119,7 @@ let
           name = "test-${key}-missing-${f}-message";
           value = {
             expr = row.step (builtins.removeAttrs row.good [ f ]);
-            expectedError = pin key "required field '${f}' is missing [(]required: ${quoted row.required}[)] [(]in prelude[.]checkRequired[)]";
+            expectedError = pin (refusals.missingField (name key) row.required f);
           };
         }) row.required
       )
