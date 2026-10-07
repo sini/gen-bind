@@ -118,14 +118,8 @@ let
     marksOf = isolatingMarksOf;
     inherit peersOf;
   };
-  o1GreenRealized = genDelivery.realize {
-    inherit projected;
-    terminals.host = o1Green;
-  };
-  o1RedRealized = genDelivery.realize {
-    inherit projected;
-    terminals.host = preFixTerminal;
-  };
+  o1GreenRealized = genDelivery.realize { } { host = o1Green; } projected;
+  o1RedRealized = genDelivery.realize { } { host = preFixTerminal; } projected;
 
   # ════════════════════════════════════════════════════════════════════════
   # O-2 — a withheld peer is named, with the mark that withheld it
@@ -134,10 +128,7 @@ let
     handed = builtins.attrNames carriage.extent;
     surface = builtins.sort builtins.lessThan (builtins.attrNames carriage);
   };
-  o2RedRealized = genDelivery.realize {
-    inherit projected;
-    terminals.host = o2RedTerminal;
-  };
+  o2RedRealized = genDelivery.realize { } { host = o2RedTerminal; } projected;
 
   # `peerRelation` is reachable off the Adapter record directly — substrate
   # side, never spliced into `specialArgs` (§2.1, §4.2) — so this reads it
@@ -177,14 +168,8 @@ let
     marksOf = isolatingMarksOf;
     inherit peersOf;
   };
-  o3GreenRealized = genDelivery.realize {
-    inherit projected;
-    terminals.host = o3RawGreen;
-  };
-  o3RedRealized = genDelivery.realize {
-    inherit projected;
-    terminals.host = preFixRawTerminal;
-  };
+  o3GreenRealized = genDelivery.realize { } { host = o3RawGreen; } projected;
+  o3RedRealized = genDelivery.realize { } { host = preFixRawTerminal; } projected;
 
   # ════════════════════════════════════════════════════════════════════════
   # O-4 — the O-1 oracle's own instrument: the spine is readable without
@@ -220,10 +205,7 @@ let
       throw "gen-bind O-4 seed: peer artifact forced"
     else
       o4RawGreen carriage;
-  o4Realized = genDelivery.realize {
-    projected = o4Projected;
-    terminals.host = o4Terminal;
-  };
+  o4Realized = genDelivery.realize { } { host = o4Terminal; } o4Projected;
 
   # The regression half, on the ORIGINAL three-member fixture: the
   # construction must leave O-1's own instrument alone under empty marks.
@@ -232,10 +214,7 @@ let
     marksOf = identityMarksOf;
     inherit peersOf;
   };
-  o4IdentityRealized = genDelivery.realize {
-    inherit projected;
-    terminals.host = o4IdentityGreen3;
-  };
+  o4IdentityRealized = genDelivery.realize { } { host = o4IdentityGreen3; } projected;
 
   # ════════════════════════════════════════════════════════════════════════
   # O-6 — the derived view is NAMED, and the name is checked
