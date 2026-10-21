@@ -38,7 +38,7 @@
 }:
 let
   wrapLib = import ./wrap.nix { inherit prelude; };
-  applicable = import ./applicable.nix { };
+  applicable = import ./applicable.nix { inherit prelude; };
 
   # ── inject ───────────────────────────────────────────────────────────────────
   # The successor to gen-flake's `injectArgs`. Its payload is `composed.values` —

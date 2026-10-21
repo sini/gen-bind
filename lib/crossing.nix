@@ -46,7 +46,7 @@ let
   contractLib = import ./crossing-contract.nix { inherit prelude; };
   adapterLib = import ./crossing-adapter.nix { inherit prelude; };
   linksetLib = import ./crossing-linkset.nix { inherit prelude algebra; };
-  applicable = import ./applicable.nix { };
+  applicable = import ./applicable.nix { inherit prelude; };
 
   # The concrete adapters — ADR-0031 F2's destination for gen-flake's
   # `inject.nix` and `terminals.nix`. `crossing-adapter.nix` defines the Adapter

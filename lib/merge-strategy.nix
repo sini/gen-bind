@@ -14,7 +14,7 @@
 { prelude }:
 let
   provenanceLib = import ./provenance.nix { inherit prelude; };
-  applicable = import ./applicable.nix { };
+  applicable = import ./applicable.nix { inherit prelude; };
 
   # The declared policies are one closed set, and every reader of a policy decodes against it here
   # (den-hoag-bvpuo): `decodePolicy refuse v` is `v` when declared, else a refusal, by name and

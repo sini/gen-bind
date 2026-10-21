@@ -258,6 +258,7 @@ in
     # `module-convention.nix` keeps the `{ ... }:` signature that excludes it (`compose.nix` joined
     # at den-hoag-ekum1, when its layer record became a `prelude.door`).
     expected = [
+      "lib/applicable.nix"
       "lib/arg-env.nix"
       "lib/compose.nix"
       "lib/contract.nix"

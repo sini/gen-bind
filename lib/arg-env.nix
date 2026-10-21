@@ -25,7 +25,7 @@
 # refused by name and catchably rather than aborting Nix's own uncatchable arity check.
 { prelude }:
 let
-  applicable = import ./applicable.nix { };
+  applicable = import ./applicable.nix { inherit prelude; };
   # crossEval — separate-compilation of an opaque slice in the TERMINAL's own evaluator.
   #
   # Resolves `module` through a FRESH nested `evalModules` (the terminal's `lib`, threaded in

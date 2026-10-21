@@ -14,7 +14,7 @@
 { prelude }:
 let
   provenanceLib = import ./provenance.nix { inherit prelude; };
-  applicable = import ./applicable.nix { };
+  applicable = import ./applicable.nix { inherit prelude; };
   typeNames = [
     "bool"
     "float"

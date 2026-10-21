@@ -273,15 +273,14 @@ in
         msg = "^gen-bind[.]crossing[.]mkHostedTerminal: `locateConfig` must be a function, or a functor whose `__functor` reaches one, not a int$";
       };
     };
-    # THE RESIDUE, pinned (den-hoag-g8lo): the door runs the caller's `__functor` on the set itself,
-    # as Nix's own call does first, so a `__functor` that cannot take its set aborts inside the door
-    # exactly as the application would. It is the caller's code failing, not a shape the door can
-    # decide without running it.
-    test-residue-a-functor-that-cannot-take-its-own-set-aborts-in-the-door = {
+    # A `__functor` whose set pattern cannot bind the set Nix pushes is not applicable: gen-prelude's
+    # walk reads the pattern before the call (den-hoag-b6nyh), so the door refuses it by name where
+    # it aborted inside the door before (the den-hoag-g8lo residue, closed).
+    test-a-functor-that-cannot-take-its-own-set-is-refused-by-name = {
       expr = (genBind.adaptArgs { __functor = { missing }: _: { }; } { } modArgs)._module.args;
       expectedError = {
-        type = "TypeError";
-        msg = "called without required argument 'missing'";
+        type = "ThrownError";
+        msg = "^gen-bind[.]adaptArgs: `adapt` must be a function, or a functor whose `__functor` reaches one, not a functor that does not reach a function$";
       };
     };
   };
