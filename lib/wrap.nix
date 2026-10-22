@@ -255,11 +255,18 @@ let
         remainingArgs = builtins.removeAttrs moduleArgs boundArgNames;
       in
       if allMatched then
-        # Fully applied — every formal is bound, so the module needs nothing from the
-        # module system; the result is still a function of the module system's call
-        # args, which no formal advertises, so that `system-wins` reads the hosted
-        # system's value on this path as on every other (den-hoag-34i06, owner-ruled
-        # 2026-10-05). A hand caller with no module system applies it to `{ }`.
+        # Fully applied — every formal is bound; the result is still a function of
+        # the module system's call args, which no formal advertises, so that
+        # `system-wins` reads the hosted system's value on this path as on every
+        # other (den-hoag-34i06, owner-ruled 2026-10-05). A hand caller with no
+        # module system applies it to `{ }`. The call args are forwarded to the
+        # module only when its pattern is a set carrying `...` (`a@{ host, ... }:`),
+        # as the partial-app branch does and nixpkgs serves (den-hoag-4uta7); the
+        # bound values win. Two shapes keep the bound-only call: a closed set
+        # pattern (nixpkgs refuses the extra args; gen serves the declared formals
+        # — enumerated divergence, ADR-0025 item 1) and a published functor over
+        # `args:` whose inner pattern no reader sees (open defect,
+        # den-hoag-fully-bound-functor-call-args-vsu8s).
         # The fully-applied path is thunk-aware (consistent with the partial-app
         # branch below): a bound arg may still carry a __configThunk (e.g. a
         # channel-only consumer `{ ch, ... }` whose every named formal is bound,
@@ -273,10 +280,14 @@ let
         # the partial-app path); it resolves against a bound `config` arg if one
         # was supplied, else `{}` — a documented ~vacuous edge.
         let
+          # `...` is invisible to `functionArgs`; gen-prelude's `patternOf` reads it (den-hoag-a48xt).
+          shape = prelude.patternOf module;
+          open = shape.kind == "set" && shape.ellipsis;
           applied =
             moduleCallArgs:
             module (
-              prelude.genAttrs boundArgNames (bindValue {
+              (if open then moduleCallArgs else { })
+              // prelude.genAttrs boundArgNames (bindValue {
                 inherit moduleCallArgs;
                 thunkConfig = if builtins.elem "config" boundArgNames then bindings.config else { };
               })

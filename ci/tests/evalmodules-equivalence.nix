@@ -142,4 +142,51 @@ in
       warnings = [ ];
     };
   };
+
+  # (5) A fully-bound OPEN module (`a@{ host, ... }:`) reads the module system's call args, as
+  # nixpkgs serves the unwrapped module (den-hoag-4uta7). `expected` is nixpkgs' own answer, with
+  # `host` and `extra` served by specialArgs; `cfgX` / `extra` are read so an empty forward fails.
+  flake.tests.evalmodules-equivalence.test-a-fully-bound-open-module-reads-the-module-arguments =
+    let
+      decl = {
+        options.seen = lib.mkOption { type = lib.types.raw; };
+        options.x = lib.mkOption {
+          type = lib.types.str;
+          default = "cx";
+        };
+      };
+      open =
+        a@{ host, ... }:
+        {
+          config.seen = {
+            names = builtins.attrNames a;
+            cfgX = a.config.x or null;
+            extra = a.extra or null;
+          };
+        };
+      hostV = {
+        name = "h";
+      };
+    in
+    {
+      expr =
+        (lib.evalModules {
+          modules = [
+            decl
+            (genBind.wrap { bindings.host = hostV; } open).module
+          ];
+          specialArgs.extra = "sa";
+        }).config.seen;
+      expected =
+        (lib.evalModules {
+          modules = [
+            decl
+            open
+          ];
+          specialArgs = {
+            host = hostV;
+            extra = "sa";
+          };
+        }).config.seen;
+    };
 }
