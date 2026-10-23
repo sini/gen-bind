@@ -198,7 +198,7 @@ bindings = {
 
 Precedence at runtime: the cfg `mergeStrategies.<name>` entry wins, then the value's `_mergeStrategy` annotation, then `defaultMergeStrategy`. Each is one of the three declared merge strategies, and anything else is refused by name, catchably, naming the field you wrote: `mergeStrategies.<name>` and `defaultMergeStrategy` when `wrap opts` is formed (`` gen-bind.wrap: `mergeStrategies.lib` is "sytem-wins", not one of "bind-wins", "system-wins", "error" ``), and the annotation where it is read (`` gen-bind: binding 'lib' has `_mergeStrategy` … ``), because decoding it earlier would force the binding value. `mergeStrategy.fromBindings` reads the annotation channel alone, and reading `(fromBindings bindings).<name>` forces that binding value to WHNF.
 
-Collision detection runs when `mkMergeValidator` is called with the module args. Warnings (for `bindWins`/`systemWins`) and errors (for `error`) include provenance if set.
+Collision detection runs when `mkMergeValidator` is called with the module args. Warnings (for `bindWins`/`systemWins`) include provenance if set, and so does the default `error` text; a `refusal` given to `wrap`/`wrapAll` renders the `error` text instead and receives the provenance as its operand.
 
 ### Config Thunks
 
@@ -511,6 +511,7 @@ wrap {
   defaultMergeStrategy ? bindWins, # fallback strategy for unspecified args
   thunkBindings ? [],              # explicit list of list-valued args containing thunks
   producerConfigs ? {},            # scopeKey -> config, for producer-scoped thunks
+  refusal ? <gen-bind's text>,     # name -> provenance -> string: the `error` policy's thrown text
 } module                           # function | { imports = [...]; } | attrset
 ```
 
@@ -520,6 +521,13 @@ subject, last. At the same point `mergeStrategies` must be an attrset, and each 
 `defaultMergeStrategy` must be a declared merge strategy; anything else is refused by name, catchably,
 naming the field (`` gen-bind.wrap: `defaultMergeStrategy` is a null, not one of … ``). `wrapAll`'s
 refusals name `gen-bind.wrapAll`.
+
+`refusal` renders the `error` policy's collision in the caller's own words: it is applied to the
+binding's name, then its provenance (the raw `provenance.<name>`, or `null`), and returns the string
+the collision throws. Without it the text is gen-bind's own (`gen-bind: binding 'lib' collides with module-system arg — set mergeStrategy to resolve`). It is checked where a collision applies it: a
+value Nix cannot apply, a function whose application to the name does not yield a function, or a
+result that is not a string, is refused by name, catchably, naming the door invoked. Warnings
+(`bind-wins`, `system-wins`) keep gen-bind's text.
 
 Returns `{ module; wrapped; validator; signature; advertisedArgs }`.
 
@@ -650,7 +658,7 @@ mergeStrategy.fromBindings bindings
 mkMergeValidator { resolvePolicy; boundArgNames; provenance; }
 ```
 
-Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the collision test runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). A collision is the bound name's membership in `moduleArgs` or in its `config._module.args`, in nixpkgs' `applyModuleArgs` order, which is also where `wrap`'s `system-wins` serves its value from, so the value and the warning agree on every channel. A bind-wins collision always reports through the validator, whichever path the module took. Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced. Through `wrap`, a fully-applied module (every formal bound) is still a function of the module system's call args, so `system-wins` serves the hosted value there too. A policy result outside the declared three (`"bind-wins"`, `"system-wins"`, `"error"`) is refused by name and catchably where a collision reads it, never read as bind-wins (`` gen-bind.mkMergeValidator: `resolvePolicy` returned "sytem-wins" for 'host', not one of … ``); absent a collision the policy is never applied. The closed set is the one `wrap` decodes against, so a `wrap` caller's misspelt merge strategy is refused first, at `wrap`'s own door, naming the field it wrote. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
+Returns a validator function `moduleArgs -> { warnings }`. Call with the module args attrset (including `config._module.args`) to check for collisions. The returned `warnings` are **lazy** (config-implicit): the collision test runs only when `.warnings` is demanded — post-fixpoint, the NixOS-idiomatic point — so the validator does no work at module-collection WHNF and is safe to feed straight into `evalModules` (this is what `wrapAll`'s `.all` relies on). A collision is the bound name's membership in `moduleArgs` or in its `config._module.args`, in nixpkgs' `applyModuleArgs` order, which is also where `wrap`'s `system-wins` serves its value from, so the value and the warning agree on every channel. A bind-wins collision always reports through the validator, whichever path the module took. Bind-wins and system-wins collisions produce warning strings in `.warnings`; error-strategy collisions throw, lazily, when `.warnings` is forced (this published door's text is gen-bind's own; `wrap`/`wrapAll` take a caller rendering as `refusal`). Through `wrap`, a fully-applied module (every formal bound) is still a function of the module system's call args, so `system-wins` serves the hosted value there too. A policy result outside the declared three (`"bind-wins"`, `"system-wins"`, `"error"`) is refused by name and catchably where a collision reads it, never read as bind-wins (`` gen-bind.mkMergeValidator: `resolvePolicy` returned "sytem-wins" for 'host', not one of … ``); absent a collision the policy is never applied. The closed set is the one `wrap` decodes against, so a `wrap` caller's misspelt merge strategy is refused first, at `wrap`'s own door, naming the field it wrote. A value Nix cannot apply — anything but a function, or a functor whose `__functor` chain reaches one within 32 steps — is refused by name and catchably when the validator applies `resolvePolicy` (`gen-bind.<site>: \`<field>\` must be a function, or a functor whose \`\_\_functor\` reaches one, not …\`).
 
 ### `provenance.format`
 

@@ -46,7 +46,9 @@ let
   # substrate closure — this function — executes inside the target's
   # evaluation whenever a bound name collides with a module-system arg,
   # reading `provenance` and the resolved policy, and it throws on a
-  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three.
+  # `_mergeStrategy = "error"` opt-in and on a policy outside the declared three. On the `error`
+  # path it applies the `wrap` caller's `refusal` there; the crossing route is not widened:
+  # `mkHostedTerminal` reaches `wrapAllCore` with `defaultCfg`'s `refusal`, as it does `contracts`.
   # (iii) THE ARGUED IMPOSSIBILITY is `crossing-adapter-set.nix`'s: closing this
   # would have to move collision detection substrate-side, before any target
   # module set exists — SITE-2's argued impossibility under ADR-0013, not a
@@ -86,10 +88,22 @@ let
     else
       { present = false; };
 
+  provSuffix =
+    prov:
+    let
+      s = provenanceLib.format prov;
+    in
+    if s == "" then "" else " (${s})";
+
+  # The error policy's refusal text: gen-bind's own reading, and `wrap`'s default `refusal`.
+  collides =
+    name: prov:
+    "gen-bind: binding '${name}'${provSuffix prov} collides with module-system arg — set mergeStrategy to resolve";
+
   mkMergeValidatorCore =
     args:
     let
-      inherit (args) boundArgNames provenance;
+      inherit (args) boundArgNames provenance refusal;
       # `wrap` hands the core its own lambda, which passes on the builtin alone (den-hoag-k0whn).
       resolvePolicy =
         if builtins.isFunction args.resolvePolicy then
@@ -110,16 +124,12 @@ let
               shown: "gen-bind.mkMergeValidator: `resolvePolicy` returned ${shown} for '${name}'"
             ) (resolvePolicy name);
             prov = provenance.${name} or null;
-            provStr =
-              let
-                s = provenanceLib.format prov;
-              in
-              if s == "" then "" else " (${s})";
+            provStr = provSuffix prov;
           in
           if !hasReal then
             [ ]
           else if strategy == "error" then
-            throw "gen-bind: binding '${name}'${provStr} collides with module-system arg — set mergeStrategy to resolve"
+            throw (refusal name prov)
           else if strategy == "system-wins" then
             [
               "gen-bind: binding '${name}'${provStr} collision — system-wins, binding value dropped"
@@ -164,9 +174,9 @@ in
       "provenance"
     ];
     open = true;
-  } mkMergeValidatorCore;
+  } (args: mkMergeValidatorCore (args // { refusal = collides; }));
   cores = {
     mkMergeValidator = mkMergeValidatorCore;
-    inherit decodePolicy systemArg;
+    inherit decodePolicy systemArg collides;
   };
 }

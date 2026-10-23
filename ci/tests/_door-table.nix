@@ -76,6 +76,7 @@ let
     "mergeStrategies"
     "producerConfigs"
     "provenance"
+    "refusal"
     "thunkBindings"
   ];
   # For the module-evaluating doors: the arg is read without being a formal, because the module

@@ -14,6 +14,7 @@ let
   contractLib = import ./contract.nix { inherit prelude; };
   mergeStrategyLib = import ./merge-strategy.nix { inherit prelude; };
   thunkLib = import ./thunk.nix { inherit prelude; };
+  applicable = import ./applicable.nix { inherit prelude; };
   signatureLib = import ./signature.nix { inherit prelude; };
   moduleConvention = import ./module-convention.nix { };
 
@@ -28,6 +29,7 @@ let
     # (CHORAG §5.1). Default {} ⇒ thunks resolve against the consumer config,
     # byte-identical to the pre-producerConfigs behavior. See thunk.nix.
     producerConfigs = { };
+    refusal = mergeStrategyLib.cores.collides;
   };
 
   # ★★★ ADR-0023 (b) SITE 1 — `applyContracts` — OFF-CROSSING BY THE ADAPTER
@@ -239,6 +241,7 @@ let
         # Build the validator for collision detection
         validator = mergeStrategyLib.cores.mkMergeValidator {
           resolvePolicy = policy;
+          inherit (cfg) refusal;
           inherit boundArgNames provenance;
         };
 
@@ -458,10 +461,45 @@ let
         (decode "defaultMergeStrategy" (o.defaultMergeStrategy or defaultCfg.defaultMergeStrategy))
         (builtins.mapAttrs (k: decode "mergeStrategies.${k}") strategies)
       ] o;
-  wrap = prelude.door {
-    name = "gen-bind.wrap";
-    optional = builtins.attrNames defaultCfg;
-  } (o: builtins.seq (checkPolicies "gen-bind.wrap" o) (module: wrapCore (o // { inherit module; })));
+  # A caller's `refusal` renders the error policy's collision in the caller's own words (gen-graph
+  # `fixpoint`'s `refusal`): applied where a collision is refused, so a value Nix cannot apply, or a
+  # rendering that is not a string, is refused there by name, naming the door the caller invoked.
+  checkRefusal =
+    site: o:
+    if o ? refusal then
+      o
+      // {
+        refusal =
+          name: prov:
+          let
+            h0 =
+              (if builtins.isFunction o.refusal then o.refusal else applicable.door site "refusal" o.refusal)
+                name;
+            m =
+              if applicable.verdict h0 == true then
+                h0 prov
+              else
+                throw "gen-bind.${site}: `refusal` must take the binding's name, then its provenance, and return a string; applied to '${name}' it returned ${applicable.describe (applicable.verdict h0) h0}, not a function";
+          in
+          if builtins.isString m then
+            m
+          else
+            "gen-bind.${site}: `refusal` returned a ${builtins.typeOf m} for '${name}', not a string";
+      }
+    else
+      o;
+  wrap =
+    prelude.door
+      {
+        name = "gen-bind.wrap";
+        optional = builtins.attrNames defaultCfg;
+      }
+      (
+        o:
+        builtins.seq (checkPolicies "gen-bind.wrap" o) (
+          module: wrapCore (checkRefusal "wrap" o // { inherit module; })
+        )
+      );
   wrapAll =
     prelude.door
       {
@@ -470,7 +508,9 @@ let
       }
       (
         o:
-        builtins.seq (checkPolicies "gen-bind.wrapAll" o) (modules: wrapAllCore (o // { inherit modules; }))
+        builtins.seq (checkPolicies "gen-bind.wrapAll" o) (
+          modules: wrapAllCore (checkRefusal "wrapAll" o // { inherit modules; })
+        )
       );
 in
 {
