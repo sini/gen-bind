@@ -77,6 +77,89 @@ in
       expected = "Abound";
     };
 
+    # A second `wrap` that binds the rest of gen-bind's partial output over an OPEN module forwards
+    # the module system's call args through it, as nixpkgs serves the unwrapped module
+    # (den-hoag-fully-bound-functor-call-args-vsu8s). `extra` and `cfgX` are read so an empty
+    # forward fails.
+    test-a-rewrapped-partial-output-over-an-open-module-reads-the-module-arguments =
+      let
+        decl = {
+          options.seen = lib.mkOption { type = lib.types.raw; };
+          options.y = lib.mkOption {
+            type = lib.types.str;
+            default = "cy";
+          };
+        };
+        open =
+          a@{ host, user, ... }:
+          {
+            config.seen = {
+              names = names a;
+              cfgY = a.config.y or null;
+              extra = a.extra or null;
+            };
+          };
+        seen =
+          m: specialArgs:
+          (lib.evalModules {
+            modules = [
+              decl
+              m
+            ];
+            inherit specialArgs;
+          }).config.seen;
+      in
+      {
+        expr = seen (wrap { bindings.host = "h"; } (wrap { bindings.user = "u"; } open).module).module {
+          extra = "sa";
+        };
+        expected = seen open {
+          host = "h";
+          user = "u";
+          extra = "sa";
+        };
+      };
+
+    # Over a CLOSED module the re-wrapped partial output keeps the bound-only call and serves the
+    # declared formals, the enumerated closed-pattern divergence (nixpkgs refuses the twin).
+    test-a-rewrapped-partial-output-over-a-closed-module-serves-its-formals = {
+      expr =
+        let
+          closed =
+            { host, user }:
+            {
+              config.x = host + user;
+            };
+        in
+        evalX [ (wrap { bindings.host = "h"; } (wrap { bindings.user = "u"; } closed).module).module ];
+      expected = "hu";
+    };
+
+    # An inner wrap's `system-wins` key reads the hosted value through an open re-wrap, as on the
+    # single-wrap path (den-hoag-34i06): the outer call forwards the module system's args.
+    test-a-rewrapped-partial-output-reads-system-wins-from-the-hosted-system = {
+      expr =
+        let
+          open =
+            a@{ host, user, ... }:
+            {
+              config.x = a.user;
+            };
+          inner = wrap {
+            bindings.user = "u";
+            mergeStrategies.user = "system-wins";
+          } open;
+        in
+        (lib.evalModules {
+          modules = [
+            opt
+            (wrap { bindings.host = "h"; } inner.module).module
+          ];
+          specialArgs.user = "SYS";
+        }).config.x;
+      expected = "SYS";
+    };
+
     test-an-imported-functor-is-wrapped = {
       expr = (bind { imports = [ (published onArg) ]; }).wrapped;
       expected = true;

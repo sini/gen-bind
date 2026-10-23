@@ -527,9 +527,10 @@ Returns `{ module; wrapped; validator; signature; advertisedArgs }`.
   functor advertising the unbound formals, or, when every formal is bound, a lambda of the module
   system's call args advertising none, which a hand caller with no module system applies to `{ }`.
   A fully-bound module whose pattern is a set carrying `...` (`a@{ host, ... }:`) is called with
-  those call args beneath its bindings, as nixpkgs serves it; a closed set pattern and a published
-  functor over `args:` are called with their bound values only (a closed pattern is served where
-  nixpkgs refuses it; the functor is an open defect, `den-hoag-fully-bound-functor-call-args-vsu8s`)
+  those call args beneath its bindings, as nixpkgs serves it; so is a re-wrapped partial output of
+  `wrap` over such a module, which forwards the call args to it. A closed set pattern and a foreign
+  published functor over `args:` are called with their bound values only (a closed pattern is served
+  where nixpkgs refuses it; the foreign functor is an open defect)
 - `wrapped` — `true` if any binding was injected
 - `validator` — `mkMergeValidator` result for collision checking, `null` if no bindings matched
 - `signature` — `buildSignature` result

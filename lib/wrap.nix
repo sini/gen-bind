@@ -253,6 +253,10 @@ let
 
         # Remaining args after stripping bound ones
         remainingArgs = builtins.removeAttrs moduleArgs boundArgNames;
+
+        # `...` is invisible to `functionArgs`; gen-prelude's `patternOf` reads it (den-hoag-a48xt).
+        shape = prelude.patternOf module;
+        open = shape.kind == "set" && shape.ellipsis;
       in
       if allMatched then
         # Fully applied — every formal is bound; the result is still a function of
@@ -264,9 +268,10 @@ let
         # as the partial-app branch does and nixpkgs serves (den-hoag-4uta7); the
         # bound values win. Two shapes keep the bound-only call: a closed set
         # pattern (nixpkgs refuses the extra args; gen serves the declared formals
-        # — enumerated divergence, ADR-0025 item 1) and a published functor over
-        # `args:` whose inner pattern no reader sees (open defect,
-        # den-hoag-fully-bound-functor-call-args-vsu8s).
+        # — enumerated divergence, ADR-0025 item 1) and a FOREIGN published functor
+        # over `args:` whose inner pattern no reader sees (open defect,
+        # den-hoag-fully-bound-functor-call-args-vsu8s). gen-bind's own partial output
+        # over an open module shows `...` (the partial branch below), so it is forwarded to.
         # The fully-applied path is thunk-aware (consistent with the partial-app
         # branch below): a bound arg may still carry a __configThunk (e.g. a
         # channel-only consumer `{ ch, ... }` whose every named formal is bound,
@@ -280,9 +285,6 @@ let
         # the partial-app path); it resolves against a bound `config` arg if one
         # was supplied, else `{}` — a documented ~vacuous edge.
         let
-          # `...` is invisible to `functionArgs`; gen-prelude's `patternOf` reads it (den-hoag-a48xt).
-          shape = prelude.patternOf module;
-          open = shape.kind == "set" && shape.ellipsis;
           applied =
             moduleCallArgs:
             module (
@@ -302,7 +304,7 @@ let
       else
         # Partial application — build wrapper
         let
-          wrapper =
+          call =
             moduleCallArgs:
             module (
               moduleCallArgs
@@ -311,6 +313,10 @@ let
                 thunkConfig = moduleCallArgs.config or { };
               })
             );
+          # The wrapper over an open module keeps its `...`, so a later `wrap` that binds the
+          # rest reads it through this functor and forwards the call args
+          # (den-hoag-fully-bound-functor-call-args-vsu8s).
+          wrapper = if open then moduleCallArgs@{ ... }: call moduleCallArgs else call;
 
           wrappedModule = moduleConvention.setFunctionArgs wrapper remainingArgs;
         in
