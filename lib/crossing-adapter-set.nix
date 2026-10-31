@@ -345,7 +345,7 @@ let
                   map (k: {
                     name = k;
                     value = null;
-                  }) (builtins.filter (k: extent ? ${k}) ([ readerId ] ++ peersOf readerId))
+                  }) (builtins.filter (k: extent ? ${k}) [ readerId ])
                 )
               );
               resolution = engine.resolve {
