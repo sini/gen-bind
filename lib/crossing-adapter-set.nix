@@ -336,7 +336,18 @@ let
                 children = _: _: { };
                 marks = _self: marksOf;
                 edges-peer = _self: peersOf;
-              } (engine.buildRoots { parentGraph = engine.vertices (builtins.attrNames extent); });
+              } (engine.buildRoots { parentGraph = engine.vertices liftedKeys; });
+              # One `peer` step from `readerId` reads no vertex but the reader and its peers, so the
+              # lift holds exactly those of them `extent` carries: the same answers, and a lift that
+              # grows with the reader's peer set rather than with the class.
+              liftedKeys = builtins.attrNames (
+                builtins.listToAttrs (
+                  map (k: {
+                    name = k;
+                    value = null;
+                  }) (builtins.filter (k: extent ? ${k}) ([ readerId ] ++ peersOf readerId))
+                )
+              );
               resolution = engine.resolve {
                 wf = engine.wellFormed {
                   alphabet = [ "peer" ];
