@@ -71,6 +71,9 @@
       inherit inputs;
       name = "gen-bind";
       testModules = ./tests;
+      # `tests-process.nix` is a PROCESS plane: its verdict is a process exit and a count, not a
+      # nix-unit output, so it is read by `apps.tests-process`, not `testModules`.
+      extraModules = [ ./tests-process.nix ];
       # `prelude` reaches the suite because `tests/entry.nix` applies the STANDALONE root entry with
       # explicit arguments — which is what keeps that cell pure, since supplying the formal means the
       # shim's fetching default is never forced. It is the SAME instance `genBind` above is built
