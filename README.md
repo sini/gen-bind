@@ -847,6 +847,8 @@ driven by the production-safety equivalence gate and the `arg-env` crossing suit
 ```bash
 nix develop ./ci --command ci                          # all suites, guarded
 nix develop ./ci --command ci wrap                     # one suite, guarded
+nix develop ./ci --command ci --tests-error            # the error-message cells, guarded
+nix develop ./ci --command ci --tests-process          # the cost cells, one evaluator process each
 nix flake check ./ci                                   # full check incl. treefmt; unguarded
 ```
 

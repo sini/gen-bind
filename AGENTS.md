@@ -273,6 +273,8 @@ Crossing sub-surface (same command with `--apply 'l: builtins.attrNames l.crossi
 
 ```sh
 nix develop ./ci --command ci                # the suites, guarded
+nix develop ./ci --command ci --tests-error  # the error-plane cells, guarded
+nix develop ./ci --command ci --tests-process  # the process-plane cost cells
 nix flake check ./ci                         # what CI runs; unguarded
 ```
 
