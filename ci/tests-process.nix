@@ -34,6 +34,15 @@
           cd "$TMPDIR"
           # The evaluator the cells run under, from this process and the binary they call.
           echo "evaluator: $(nix-instantiate --version | sed -n 1p)"
+          # A thunk count is defined only for a serial run, so every cell below (`at`, whose statistics are a
+          # command prefix) is serial. The options are resolved once (gen-harness `lib.serialEval`).
+          # shellcheck disable=SC1091
+          source ${inputs.gen-harness.lib.serialEval { inherit pkgs; }}
+          serialEvalOptions "$(command -v nix-instantiate)" || {
+            echo "tests-process: CONTROL FAILED: the serial options of $(command -v nix-instantiate) could not be resolved" >&2
+            exit 2
+          }
+          echo "tests-process: serial options: ''${SERIAL_EVAL[*]:-(none)}"
         ''
         + ''
           export NIX_STATE_DIR=$TMPDIR/nix-state NIX_LOG_DIR=$TMPDIR/nix-log
@@ -49,7 +58,7 @@
             rm -f "$TMPDIR/stats"
             rc=0
             val=$(NIX_SHOW_STATS=1 NIX_SHOW_STATS_PATH="$TMPDIR/stats" \
-              nix-instantiate --eval --strict --readonly-mode \
+              nix-instantiate "''${SERIAL_EVAL[@]}" --eval --strict --readonly-mode \
               --argstr arm "$1" \
               --argstr libSrc "$libSrc" \
               --argstr genPreludeSrc "$genPreludeSrc" \
